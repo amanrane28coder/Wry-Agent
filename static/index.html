@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#faf8f3">
+  <meta name="description" content="Wry — a code-change impact agent. Trace a change through the import graph, rank tests, remember investigations.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%231a1c20'/%3E%3Ctext x='16' y='23' font-family='system-ui,sans-serif' font-size='19' font-weight='800' fill='%23faf8f3' text-anchor='middle'%3EW%3C/text%3E%3C/svg%3E">
+  <title>Wry — Change Impact Agent</title>
+  <link rel="stylesheet" href="/static/style.css?v=14">
+  <script defer src="/static/app.js?v=14"></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="Wry home">
+      <span class="brand-mark">W</span>
+      <span class="brand-word"><strong>WRY</strong><em>Change impact agent</em></span>
+    </a>
+    <div class="connection"><i id="connection-dot"></i><span id="connection-text">CHECKING FALKORDB</span></div>
+  </header>
+
+  <main class="workspace">
+    <aside class="repo-rail">
+      <div class="rail-label">REPOSITORY</div>
+      <div class="repo-name"><span id="repo-icon" class="repo-icon">N</span><div><strong id="repo-name">Northstar Commerce</strong><small id="repo-kind">SYNTHETIC DEMO GRAPH</small></div></div>
+      <div class="module-header"><div class="rail-label module-label">MODULES</div><span id="module-count" aria-live="polite">0</span></div>
+      <label class="module-search"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true"><circle cx="6" cy="6" r="4.5" stroke="currentColor" stroke-width="1.5"/><path d="M9.5 9.5 13 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><input id="module-filter" type="search" placeholder="Filter modules" autocomplete="off" aria-label="Filter modules"></label>
+      <nav id="module-list" aria-label="Code modules"></nav>
+      <p id="module-empty" hidden>No modules match that filter.</p>
+      <details class="repo-import">
+        <summary><span>Local repository metadata</span><span id="repo-index-status">OFF</span></summary>
+        <div class="repo-import-content">
+          <button id="index-repo" type="button">INDEX LOCAL PYTHON REPOSITORY</button>
+          <small id="index-details">Repository indexing is off. The Graph Hacks rules prohibit private or restricted data in FalkorDB; the synthetic demo remains active.</small>
+          <span id="index-message" role="status"></span>
+        </div>
+      </details>
+      <div class="rail-footer"><span class="tiny-dot"></span> FALKORDB IS THE SOURCE OF ANALYSIS</div>
+    </aside>
+
+    <section class="main-panel">
+      <div class="page-heading">
+        <div>
+          <div class="eyebrow">MCP-ORCHESTRATED INVESTIGATION</div>
+          <h1>What might break?</h1>
+          <p>Trace a proposed change through imports, then see which tests cover the affected surface.</p>
+        </div>
+        <div class="protocol-tag"><span>GRAPH</span> FalkorDB <b>/</b> MCP</div>
+      </div>
+
+      <section class="query-panel" aria-label="Change investigation">
+        <div class="query-topline"><label for="target">CHANGED MODULE</label><span id="repo-scope">SYNTHETIC DEMO REPOSITORY</span></div>
+        <div class="query-controls">
+          <select id="target" aria-label="Changed module"></select>
+          <select id="other-target" aria-label="Shortest path to (optional)"></select>
+        </div>
+        <div class="query-controls">
+          <button id="run-agent-button" class="primary-button"><span class="button-icon"><svg width="11" height="12" viewBox="0 0 11 12" fill="none" aria-hidden="true"><path d="M1 1.5v9l8.5-4.5L1 1.5z" fill="currentColor"/></svg></span> RUN AGENT</button>
+          <button id="trace-button" class="secondary-button">TRACE IMPACT</button>
+        </div>
+        <label class="prompt-label" for="prompt">INVESTIGATION REQUEST</label>
+        <textarea id="prompt" rows="2" maxlength="600">If this module changes, what depends on it and what should we retest?</textarea>
+        <div class="query-bottom"><span id="agent-mode-label">Tool selection is shown with every result. Analysis is read-only.</span><span id="query-message" role="status"></span></div>
+      </section>
+
+      <section id="empty-state" class="empty-state">
+        <div class="empty-glyph" aria-hidden="true"><svg width="44" height="44" viewBox="0 0 44 44" fill="none"><circle cx="22" cy="22" r="20" stroke="currentColor" stroke-width="1.5" stroke-dasharray="4 4"/><circle cx="22" cy="22" r="4" fill="currentColor"/><circle cx="10" cy="14" r="2.5" fill="currentColor" opacity="0.5"/><circle cx="34" cy="14" r="2.5" fill="currentColor" opacity="0.5"/><circle cx="10" cy="30" r="2.5" fill="currentColor" opacity="0.5"/><circle cx="34" cy="30" r="2.5" fill="currentColor" opacity="0.5"/><path d="M12 15.5 20 20.5M32 15.5 24 20.5M12 28.5 20 23.5M32 28.5 24 23.5" stroke="currentColor" stroke-width="1" opacity="0.5"/></svg></div>
+        <strong>Choose a module to begin</strong>
+        <span>Wry will ask FalkorDB for the dependency paths and matching tests.</span>
+      </section>
+
+      <section id="results" class="results" hidden aria-live="polite">
+        <div class="result-heading">
+          <div><div class="eyebrow">INVESTIGATION RESULT</div><h2 id="result-target"></h2></div>
+          <button id="save-plan" class="secondary-button" disabled>SAVE TEST PLAN</button>
+        </div>
+        <div class="metrics analysis-section" id="metrics"></div>
+        <div class="reasoning-row analysis-section"><span class="reasoning-icon">i</span><div><strong id="selected-tool"></strong><p id="selection-reason"></p></div></div>
+
+        <div id="agent-trace-wrap" hidden>
+          <div class="section-heading"><h3>AGENT TRACE</h3><span>THOUGHT → ACTION → OBSERVATION</span></div>
+          <div id="agent-trace" class="agent-trace"></div>
+        </div>
+
+        <div id="final-answer-wrap" class="final-answer" hidden>
+          <strong>AGENT ANSWER</strong>
+          <p id="final-answer"></p>
+        </div>
+
+        <div id="proposed-action" class="proposed-action" hidden>
+          <div class="proposed-body">
+            <strong id="proposed-title">PROPOSED ACTION</strong>
+            <p id="proposed-message"></p>
+            <div id="proposed-tests" class="proposed-tests"></div>
+          </div>
+          <button id="approve-plan" class="primary-button">APPROVE &amp; SAVE PLAN</button>
+        </div>
+
+        <div id="chain-wrap" class="analysis-section" hidden>
+          <div class="section-heading"><h3>SHORTEST DEPENDENCY PATH</h3><span id="chain-hops"></span></div>
+          <div id="chain-view" class="chain-view"></div>
+        </div>
+
+        <div class="section-heading analysis-section" id="impact-map-heading"><h3>IMPACT MAP</h3><span id="map-count"></span></div>
+        <div id="impact-map" class="impact-map analysis-section" hidden>
+          <div class="impact-map-scroll"><svg id="impact-svg" role="img" aria-label="Dependency impact map"></svg></div>
+          <div class="map-legend">
+            <span><i class="file-dot" style="background:var(--signal)"></i>TARGET</span>
+            <span><i class="file-dot critical"></i>CRITICAL</span>
+            <span><i class="file-dot high"></i>HIGH</span>
+            <span><span class="map-line"></span>CHANGE PROPAGATES →</span>
+          </div>
+        </div>
+
+        <div class="section-heading analysis-section"><h3>DEPENDENCY PATHS</h3><span id="path-count"></span></div>
+        <div id="impact-list" class="impact-list analysis-section"></div>
+
+        <div class="section-heading tests-heading analysis-section"><h3>RECOMMENDED TESTS</h3><span>FROM GRAPH COVERAGE</span></div>
+        <div id="test-list" class="test-list analysis-section"></div>
+        <div class="section-heading tests-heading analysis-section" id="pagerank-heading" hidden><h3>RISKIEST FIRST</h3><span>PAGERANK OVER IMPORT GRAPH</span></div>
+        <div id="pagerank-list" class="test-list analysis-section" hidden></div>
+        <div class="section-heading tests-heading analysis-section" id="bridges-heading" hidden><h3>CRITICAL BRIDGES</h3><span>BETWEENNESS OVER IMPORT GRAPH</span></div>
+        <div id="bridges-list" class="test-list analysis-section" hidden></div>
+        <div class="section-heading tests-heading analysis-section" id="communities-heading" hidden><h3>BLAST RADIUS</h3><span>CDLP COMMUNITIES OVER IMPORT GRAPH</span></div>
+        <div id="communities-list" class="analysis-section" hidden></div>
+        <div class="section-heading tests-heading analysis-section" id="memory-heading" hidden><h3>AGENT MEMORY</h3><span>PAST INVESTIGATIONS · FROM THE GRAPH</span></div>
+        <div id="memory-list" class="analysis-section" hidden></div>
+        <div class="provenance analysis-section" id="provenance"></div>
+        <details class="cypher-details analysis-section" id="cypher-details" hidden>
+          <summary id="cypher-summary">GRAPH QUERY · CYPHER EXECUTED IN FALKORDB</summary>
+          <pre id="cypher-query"></pre>
+        </details>
+        <div id="plan-message" role="status"></div>
+      </section>
+
+      <section id="evaluation" class="eval-panel" aria-label="Graph evaluation">
+        <div class="page-heading">
+          <div>
+            <div class="eyebrow">EXPECTED-RESULTS EVALUATION</div>
+            <h2>Does the graph answer correctly?</h2>
+            <p>Seven fixed cases run against live FalkorDB: five trace cases diff actual importers and tests against expectations (including an unknown-target rejection), plus a PageRank ranking case and a CDLP community case.</p>
+          </div>
+          <button id="evaluate-button" class="secondary-button">RUN EVALUATION</button>
+        </div>
+        <div id="eval-message" role="status"></div>
+        <div id="eval-results"></div>
+      </section>
+    </section>
+  </main>
+</body>
+</html>
