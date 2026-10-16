@@ -240,109 +240,13 @@ The unit tests use a fake graph and do not require FalkorDB credentials. A live 
 
 The participant directed the project throughout: choosing what to build, reviewing each change line by line, running the test suite and live verifications, and making every design decision below. Muse implemented code under that direction.
 
-AI coding assistance was provided by Muse (Meta's personal AI agent) at the
-participant's request, in two areas:
+AI coding assistance was provided by Muse (Meta's personal AI agent) at the participant's request, in three areas:
 
-**1. Independent review (Oct 15, 2026).** Review of the full `wry_hackathon/`
-codebase (main.py, graph_agent.py, 11 tests, README, docs/research.md,
-demo-script.md, submission-checklist.md) against the official hackathon rules,
-including verification of the "4 importers / 5 tests / 62% surface" claims
-against the fixture data, the new-work rule (all files dated Oct 15, after the
-event opened), and the privacy gate. Also a live review of the running app at
-`127.0.0.1:8002` against the Track 1 "Agents That Act on Connected Data" bar.
+**1. Independent review (Oct 15, 2026).** Reviewed the full `wry_hackathon/` codebase against the official hackathon rules — verifying the "4 importers / 5 tests / 62% surface" claims against the fixture data, the new-work rule, and the privacy gate — plus a live review of the running app against the Track 1 "Agents That Act on Connected Data" bar. The participant's own follow-up reviews caught the remaining issues (approval-token bypass holes, missing PATH TO handling, demo-only evaluation scope, test-file `IMPORTS` edges); each was fixed at the root.
 
-**2. Implemented improvements (Oct 15, 2026), at the participant's request.**
-Round 1: `/api/targets` in main.py now reads code targets from FalkorDB in all
-modes (previously the web UI dropdown used Python constants in demo mode);
-demo-graph seeding moved to FastAPI startup so the MCP tools are genuinely
-read-only; added `run_evaluation()` in graph_agent.py plus
-`GET /api/agent/evaluate` with expected-results cases (token store, session,
-email, payment gateway, unknown-target rejection). Round 2: the two core Cypher
-queries extracted as named constants in graph_agent.py, included in every trace
-result, and shown in the web UI under a "GRAPH QUERY" panel; added a RUN
-EVALUATION panel to the web UI (static/index.html, static/app.js,
-static/style.css) rendering the pass/fail report with diffs; added an ASCII
-graph data-model diagram to the README; updated docs/demo-script.md and
-docs/submission-checklist.md. Live verification was also performed against
-FalkorDB Cloud (evaluation cases pass; trace on token_store.py: 4 importers, 5
-tests, 62% surface; test plan saved to the graph). Round 3: added
-`rank_tests_pagerank_tool`, an MCP tool that runs FalkorDB's
-`algo.pageRank('File', 'IMPORTS')` over the import graph and orders recommended
-tests by the PageRank importance of the impacted modules they cover (riskiest
-first); wired through the MCP tool router (rule-based keywords and the model
-tool allowlist); surfaced in the web UI as a RISKIEST FIRST section; documented
-in the README graph-queries section and docs/demo-script.md. Round 4: added a
-PageRank expected-results case to the evaluation; saved test plans now order
-tests by PageRank importance; added an IMPACT MAP visualization of the
-dependency paths to the web UI.
+**2. Implementation (Oct 15–16, 2026), at the participant's request.** Built under the participant's direction: the bounded Thought → Action → Observation agent loop (`POST /api/agent/run`); FalkorDB-backed agent memory (`Investigation` nodes); the MCP tool set including the named graph-algorithm tools — PageRank test ranking, betweenness bridge detection, CDLP blast-radius communities, shortest dependency path; the proposal/approval token lifecycle for plan writes (server-enforced, single-use); the expected-results evaluation endpoint and its UI panel; the "Impact Dossier" UI redesign; the impact-map visualization; and README hardening (kill test, why-not-vector-DB rationale, Limitations). Every change was live-verified against FalkorDB Cloud (62/62 tests, 7/7 evaluation).
 
-**3. Agent loop, memory, and more graph algorithms (Oct 15, 2026), at the participant's request.**
-Added a bounded Thought → Action → Observation agent loop (`run_agent_loop` in
-main.py, `POST /api/agent/run`) that chains MCP tools — trace, PageRank
-ranking, memory recall — narrating each step's real decision rule; the write
-tool is proposed, never auto-executed, and waits for human approval (UI shows
-an AGENT TRACE timeline plus an approval card). Added FalkorDB-backed agent
-memory: the runtime records each investigation as an `Investigation` node
-(`FOR_TARGET` → file) and `recall_investigations_tool` reads the history back.
-Added `shortest_dependency_path_tool` (shortest directed IMPORTS chain between
-two modules) and `find_bridge_modules_tool` (`algo.betweenness` choke points).
-Added per-query latency timings shown in the GRAPH QUERY panel. Wired through
-the MCP router (rule keywords + model allowlist), surfaced in the UI
-(run-agent button, trace timeline, memory/bridges/chain sections), with unit
-tests for the loop policy, approval gating, max-step bound, and the new tools.
-Round 6: full visual redesign of the web UI at the participant's request ("don't
-make it look AI-generated") — replaced the dark dashboard with a light "Impact
-Dossier" concept (warm paper, ink typography, hairline rules, one vermilion
-accent, numbered dossier sections, SVG icons, redesigned agent-trace timeline
-and impact map). Round 7: three review fixes from the participant — (a)
-server-side approval tokens for plan writes: `POST /api/agent/test-plan`
-rejects with 403 unless it carries a single-use, expiring token the server
-issued alongside a proposal (`run_agent_loop`'s `proposed_action` or the
-investigate response); UI confirmation alone is no longer enough; (b) the
-agent loop asks the user to pick a destination module (PATH TO) when a
-shortest-path request names only one module, instead of silently running
-impact tracing; (c) `run_evaluation()` refuses with an explanatory reason
-when the active dataset is a locally indexed repository, since the expected
-results are hard-coded for the Northstar demo graph. Round 8: two follow-up
-review fixes from the participant — (a) the approval check moved into
-`create_test_plan_tool` itself, so direct MCP calls cannot bypass the REST
-plan-approval token (the endpoint peeks for a clean 403; the tool consumes the
-single-use token); (b) the TRACE IMPACT button now forwards the PATH TO
-selection, and a shortest-path prompt without a second module returns
-`needs_input` instead of calling the tool with a missing argument. Round 9:
-two more review findings from the participant — (a) closed the remaining
-approval hole: investigate/run now issue a *proposal* token that authorizes
-nothing; only the explicit save action (`POST /api/agent/test-plan`) approves
-it, and `create_test_plan_tool` consumes approved tokens exactly once — a
-proposal token used directly on the MCP tool is refused (renamed
-`approval_token` → `proposal_token` throughout); (b) evaluation now runs the
-six cases concurrently (ThreadPoolExecutor, per-case `duration_ms`), cutting
-the live run from ~38s to ~11s against FalkorDB Cloud. Also silenced a
-third-party `IncompleteFieldDefinitionWarning` (the `mcp` package's own
-FastMCP `Settings` model declares a `lifespan` field with an unresolvable
-forward reference) with a targeted ignore-filter where Wry creates its MCP
-server; Wry never configures a lifespan, so the warning was noise. Round 10:
-added `find_impact_communities_tool`, an MCP tool running FalkorDB's
-`algo.labelPropagation` (CDLP) over the import graph to group a change's blast
-radius into architectural communities (target's community, communities touched
-by the impact); wired through the MCP router (rule keywords + model allowlist)
-and the agent loop, which is now a bounded 5-step chain (trace → PageRank rank
-→ communities → memory recall → proposed plan) with the communities analysis
-merged into the display result, its Cypher, and its timings; added a seventh
-expected-results evaluation case for CDLP (asserting grouping structure, not
-exact community ids, which are non-deterministic); surfaced a BLAST RADIUS
-section in the web UI. Also hardened the README as a judged artifact: a
-"kill test" statement (disconnect FalkorDB → every tool fails), a one-line
-"why not a vector DB" rationale, an honest Limitations section, and one-line
-"why this algorithm" notes for PageRank/betweenness/CDLP/shortest-path. Round 11:
-two review findings from the participant — (a) the local indexer emitted
-`IMPORTS` edges from test files, so test nodes could influence CDLP module
-communities in local-repository mode (the demo graph never had test-origin
-`IMPORTS` edges, so the judged demo was unaffected); fixed at the root in
-`scan_local_repository`, which now emits module-to-module `IMPORTS` edges only
-— test files connect via `COVERS`, matching the demo data model — with a
-regression test; (b) fixed the evaluation panel copy in `static/index.html`,
-which described "seven cases plus two more" for a seven-case total. Round 12 (Oct 16): a frame-by-frame review of the demo video found the agent loop’s display result showing — % for repository surface — `rank_tests_by_pagerank` did not pass through `change_surface_score` from the trace analysis, and the loop displays the rank result; fixed with a one-line change plus a regression assertion. Round 13 (Oct 16): at the participant’s request, fixed the impact map rendering nodes but zero edges — `parentOf` in `renderImpactMap` looked up the wrong end of the dependency chain; corrected to the previous chain entry and live-verified (5 nodes, 4 edges). Demo video (Oct 16): recorded via a scripted Playwright run in headless Chrome on the participant’s Mac (two agent runs, impact map, Cypher panel, memory, approval, evaluation); headless Chrome paints no cursor in recordings, so a fake arrow cursor with click ripples was injected for the recording and the prompt text was typed character by character. The narration script was drafted by Muse; the voiceover is the participant’s own recording.
+**3. Demo video (Oct 16).** Recorded via a scripted Playwright run in headless Chrome on the participant's Mac (two agent runs, impact map, Cypher panel, memory, approval, evaluation). Headless Chrome paints no cursor in recordings, so a fake arrow cursor with click ripples was injected and the prompt text was typed character by character. The narration script was drafted by Muse; the voiceover is the participant's own recording.
 
 The participant directed the work described above, ran the test suite and live verifications.
 
