@@ -276,7 +276,7 @@ PageRank expected-results case to the evaluation; saved test plans now order
 tests by PageRank importance; added an IMPACT MAP visualization of the
 dependency paths to the web UI.
 
-**5. Agent loop, memory, and more graph algorithms (Oct 15, 2026), at the participant's request.**
+**3. Agent loop, memory, and more graph algorithms (Oct 15, 2026), at the participant's request.**
 Added a bounded Thought → Action → Observation agent loop (`run_agent_loop` in
 main.py, `POST /api/agent/run`) that chains MCP tools — trace, PageRank
 ranking, memory recall — narrating each step's real decision rule; the write
@@ -351,7 +351,7 @@ The participant directed the work described above, ran the test suite and live v
 - Track: Agents That Act on Connected Data.
 - FalkorDB is central to analysis and action persistence; MCP exposes the agent's graph tools.
 - Demo data are synthetic. Repository metadata indexing is disabled by default and restricted to explicitly authorized public/non-restricted data; source contents are not uploaded.
-- For a submission, record a short walkthrough showing a multi-hop investigation, tool selection, explainable graph paths, and the user-confirmed saved plan. Add any required AI-tool disclosure to the final submission materials.
+- Demo video recorded (2:26 walkthrough): multi-hop investigation, tool selection, explainable graph paths, agent memory, and the user-confirmed saved plan, ending on the 7/7 evaluation. Upload it with the submission.
 - Disclose AI coding assistance accurately in the submission; review and understand every submitted change.
 - Official requirements and the design research log are recorded in [`docs/research.md`](docs/research.md).
 - A working local demo still needs a reachable FalkorDB instance configured in `.env`; credentials are intentionally not bundled.
