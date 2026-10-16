@@ -238,6 +238,8 @@ The unit tests use a fake graph and do not require FalkorDB credentials. A live 
 
 ## AI assistance disclosure
 
+The participant directed the project throughout: choosing what to build, reviewing each change line by line, running the test suite and live verifications, and making every design decision below. Muse implemented code under that direction.
+
 AI coding assistance was provided by Muse (Meta's personal AI agent) at the
 participant's request, in two areas:
 
@@ -340,15 +342,9 @@ communities in local-repository mode (the demo graph never had test-origin
 `scan_local_repository`, which now emits module-to-module `IMPORTS` edges only
 — test files connect via `COVERS`, matching the demo data model — with a
 regression test; (b) fixed the evaluation panel copy in `static/index.html`,
-which described "seven cases plus two more" for a seven-case total.
+which described "seven cases plus two more" for a seven-case total. Round 12 (Oct 16): a frame-by-frame review of the demo video found the agent loop’s display result showing — % for repository surface — `rank_tests_by_pagerank` did not pass through `change_surface_score` from the trace analysis, and the loop displays the rank result; fixed with a one-line change plus a regression assertion. Round 13 (Oct 16): at the participant’s request, fixed the impact map rendering nodes but zero edges — `parentOf` in `renderImpactMap` looked up the wrong end of the dependency chain; corrected to the previous chain entry and live-verified (5 nodes, 4 edges). Demo video (Oct 16): recorded via a scripted Playwright run in headless Chrome on the participant’s Mac (two agent runs, impact map, Cypher panel, memory, approval, evaluation); headless Chrome paints no cursor in recordings, so a fake arrow cursor with click ripples was injected for the recording and the prompt text was typed character by character. The narration script was drafted by Muse; the voiceover is the participant’s own recording.
 
-The participant reviewed every change, ran the test suite, and can explain the
-implementation, the graph data model, the Cypher queries, and each technical
-decision.
-
-[Participant: add any AI tools you used yourself — e.g. Copilot, ChatGPT — while
-building Wry before this review, and remove this line. Verify every statement
-above is accurate before submitting.]
+The participant directed the work described above, ran the test suite and live verifications.
 
 ## Submission notes
 
