@@ -8,15 +8,15 @@ This is a focused prototype for WeMakeDevs Graph Hacks, Track 1: **Agents That A
 
 - **Multi-hop reasoning:** traverses `IMPORTS` paths up to five hops from a changed module and finds `COVERS` test edges for the resulting change surface.
 - **Graph tools through MCP:** provides `list_code_targets`, `trace_change_impact_tool`, `rank_tests_pagerank_tool`, `shortest_dependency_path_tool`, `find_bridge_modules_tool`, `find_impact_communities_tool`, `recall_investigations_tool` (all read-only), and `create_test_plan_tool` (the single write action); the web agent calls these through the MCP client protocol.
-- **Honest MCP annotations:** discovery marks investigation tools read-only and the test-plan tool as a non-idempotent write. These are client-facing hints; the application still enforces tool allowlists and authorization itself. Plan writes use a proposal lifecycle: `/api/agent/run` and `/api/agent/investigate` issue a *proposal* token that authorizes nothing; the user's explicit save action (`POST /api/agent/test-plan`) approves it; `create_test_plan_tool` consumes the approved token exactly once (`_consume_plan_approval` in graph_agent.py). A proposal token used directly on the MCP tool — bypassing the REST approval — is refused before any write.
+- **Honest MCP annotations:** discovery marks investigation tools read-only and the test-plan tool as a non-idempotent write. These are client-facing hints; the application still enforces tool allowlists and authorization itself. Plan writes use a proposal lifecycle: `/api/agent/run` and `/api/agent/investigate` issue a *proposal* token that authorizes nothing; the user's explicit save action (`POST /api/agent/test-plan`) approves it; `create_test_plan_tool` consumes the approved token exactly once (`_consume_plan_approval` in graph_agent.py). A proposal token used directly on the MCP tool - bypassing the REST approval - is refused before any write.
 - **Constrained tool choice:** by default a local rule-based router selects between the read-only tools. Optionally enable OpenAI-compatible model tool calling with `LLM_TOOL_SELECTION=true` and `OPENAI_API_KEY`; prompts are sent to that endpoint only in this explicit mode. The model cannot issue Cypher or invoke the write action, and its tool name is validated against an allowlist before MCP execution.
-- **Agent loop (Thought → Action → Observation):** `POST /api/agent/run` runs a bounded (max 5 steps) loop that chains tools — trace impact, then PageRank ranking, then blast-radius communities (CDLP), then memory recall — narrating each step's real decision rule and summarizing each tool's actual output. The write tool is never executed by the loop; it is proposed with a single-use server approval token and waits for human approval. If a shortest-path request names only one module, the loop asks for the destination (PATH TO) instead of silently substituting impact tracing. The UI renders the loop as an AGENT TRACE timeline plus an approval card.
-- **Agent memory in the graph:** every investigation is recorded as an `Investigation` node (`FOR_TARGET` → the changed file) by the agent runtime — the MCP tools themselves stay read-only. `recall_investigations_tool` reads the history back, so the agent remembers what it learned in earlier sessions instead of re-deriving it.
+- **Agent loop (Thought -> Action -> Observation):** `POST /api/agent/run` runs a bounded (max 5 steps) loop that chains tools - trace impact, then PageRank ranking, then blast-radius communities (CDLP), then memory recall - narrating each step's real decision rule and summarizing each tool's actual output. The write tool is never executed by the loop; it is proposed with a single-use server approval token and waits for human approval. If a shortest-path request names only one module, the loop asks for the destination (PATH TO) instead of silently substituting impact tracing. The UI renders the loop as an AGENT TRACE timeline plus an approval card.
+- **Agent memory in the graph:** every investigation is recorded as an `Investigation` node (`FOR_TARGET` -> the changed file) by the agent runtime - the MCP tools themselves stay read-only. `recall_investigations_tool` reads the history back, so the agent remembers what it learned in earlier sessions instead of re-deriving it.
 - **Graph-based action:** only after the user clicks **Save Test Plan** (or approves a proposed plan) does Wry persist a `TestPlan` node with `REVIEW` and `RUN` relationships, tests ordered by PageRank importance.
 - **Explainability:** shows the selected tool and why it was selected, the agent trace, dependency paths, test coverage, graph provenance, per-query latency, and the exact action taken.
 - **Visible graph proof:** every investigation result includes the exact Cypher queries executed in FalkorDB with per-query timings, shown in the UI under "GRAPH QUERY".
-- **Named graph algorithms as agent tools:** `rank_tests_pagerank_tool` runs FalkorDB's `algo.pageRank` over the import graph and orders recommended tests by the PageRank importance of the impacted modules they cover — riskiest first. `find_bridge_modules_tool` runs `algo.betweenness` to surface architectural choke points. `find_impact_communities_tool` runs `algo.labelPropagation` (CDLP) to group the change's blast radius into architectural communities — answering "does this change stay local or spill across the codebase?" `shortest_dependency_path_tool` finds the shortest directed dependency chain between two modules. All are selected via MCP like the other tools.
-- **Expected-results evaluation:** `GET /api/agent/evaluate` scores live FalkorDB traversal results against expected importers and tests for five targets (including an unknown-target rejection case), plus a sixth case checking the PageRank test ranking and a seventh checking CDLP community detection, returning per-case diffs and a pass/total summary. Cases are independent read-only queries and run concurrently (ThreadPoolExecutor), with per-case `duration_ms` in the report — about 11s against FalkorDB Cloud instead of ~38s sequential. Expectations live in `EVALUATION_CASES` in `graph_agent.py` and are hard-coded for the Northstar demo graph — so the endpoint refuses with an explanatory SKIPPED reason when a local repository is indexed instead of producing misleading failures. (The CDLP case asserts grouping structure, not exact community ids: label propagation processes nodes in random order, so ids are not stable across runs.) The web UI has a RUN EVALUATION panel that renders the report.
+- **Named graph algorithms as agent tools:** `rank_tests_pagerank_tool` runs FalkorDB's `algo.pageRank` over the import graph and orders recommended tests by the PageRank importance of the impacted modules they cover - riskiest first. `find_bridge_modules_tool` runs `algo.betweenness` to surface architectural choke points. `find_impact_communities_tool` runs `algo.labelPropagation` (CDLP) to group the change's blast radius into architectural communities - answering "does this change stay local or spill across the codebase?" `shortest_dependency_path_tool` finds the shortest directed dependency chain between two modules. All are selected via MCP like the other tools.
+- **Expected-results evaluation:** `GET /api/agent/evaluate` scores live FalkorDB traversal results against expected importers and tests for five targets (including an unknown-target rejection case), plus a sixth case checking the PageRank test ranking and a seventh checking CDLP community detection, returning per-case diffs and a pass/total summary. Cases are independent read-only queries and run concurrently (ThreadPoolExecutor), with per-case `duration_ms` in the report - about 11s against FalkorDB Cloud instead of ~38s sequential. Expectations live in `EVALUATION_CASES` in `graph_agent.py` and are hard-coded for the Northstar demo graph - so the endpoint refuses with an explanatory SKIPPED reason when a local repository is indexed instead of producing misleading failures. (The CDLP case asserts grouping structure, not exact community ids: label propagation processes nodes in random order, so ids are not stable across runs.) The web UI has a RUN EVALUATION panel that renders the report.
 - **Data provenance:** demo and locally indexed files/relationships carry distinct provenance labels.
 - **Privacy-gated repository indexing:** off by default. It requires `WRY_ALLOW_REPOSITORY_METADATA_UPLOAD=true`, an explicit UI confirmation that the selected repository is public or otherwise non-restricted, and independent API/indexer checks. Only relative Python paths, labels, and import/test edges are sent; source text stays local. Hidden folders, virtual environments, generated output, symlinks, files over 1 MB, and repositories over 2,000 Python files are skipped. Use the synthetic graph for the hackathon demo unless you have verified the source data is eligible.
 
@@ -62,7 +62,7 @@ RETURN f.criticality
 
 The named graph algorithm ranks tests by module importance. PageRank scores are
 based on incoming `IMPORTS` edges, so a module scores highly when much of the
-repository depends on it — a direct blast-radius signal. Scores are computed
+repository depends on it - a direct blast-radius signal. Scores are computed
 over `File`/`IMPORTS` graph-wide and filtered to the active repository:
 
 ```cypher
@@ -77,7 +77,7 @@ impacted modules it covers. The algorithm is exposed as the
 as the other tools.
 
 Two more named algorithms serve as agent tools. Betweenness centrality finds
-the architectural choke points — modules that lie on the most dependency paths
+the architectural choke points - modules that lie on the most dependency paths
 (a connector-importance signal, complementary to PageRank's popularity signal):
 
 ```cypher
@@ -88,7 +88,7 @@ RETURN node.path AS path, score ORDER BY score DESC LIMIT 10
 ```
 
 Shortest-path answers "why is X affected by the change in Y" with the minimal
-directed dependency chain (importer → dependency):
+directed dependency chain (importer -> dependency):
 ```cypher
 MATCH (a:File {repository_id:$repo, path:$from}), (b:File {repository_id:$repo, path:$to})
 WITH a, b, shortestPath((a)-[:IMPORTS*1..10]->(b)) AS p
@@ -98,7 +98,7 @@ RETURN [n IN nodes(p) | n.path] AS chain, length(p) AS hops
 
 Community detection via label propagation (CDLP) answers "does this change stay
 local or spill across the architecture?" Densely import-connected modules
-converge on a shared community id — the codebase's architectural neighborhoods.
+converge on a shared community id - the codebase's architectural neighborhoods.
 The agent reports which community the changed module sits in and how many
 distinct communities its transitive impact touches:
 
@@ -114,7 +114,7 @@ of what they cover (popularity signal); betweenness finds the bridge modules
 where a change cascades (connector signal); CDLP groups the blast radius into
 architectural neighborhoods (locality signal); shortest-path gives the exact
 route a change propagates along. Together they let the agent reason about a
-change the way an architect would — what matters, what connects, what clusters,
+change the way an architect would - what matters, what connects, what clusters,
 and what path it takes.
 Agent memory is itself graph-native. After each investigation the runtime (not
 the read-only MCP tools) records what was learned; recall reads it back:
@@ -154,7 +154,7 @@ The repository-surface percentage is `(changed target + unique transitive import
 
 The kill test: disconnect FalkorDB and every capability fails. Tracing, PageRank
 ranking, bridge detection, community detection, shortest paths, memory recall,
-target listing, evaluation — all are FalkorDB queries; without the graph the
+target listing, evaluation - all are FalkorDB queries; without the graph the
 agent cannot answer a single question, let alone act. No result is precomputed,
 cached in Python, or derivable from flat storage: multi-hop reachability,
 centrality, and community structure are computed inside FalkorDB on every run,
@@ -164,7 +164,7 @@ Why not a vector database: embeddings rank by similarity, which answers "what
 looks like this change?" Impact analysis needs exact multi-hop reachability
 ("what transitively imports this module?"), centrality ("which module connects
 the most dependency paths?"), and community structure ("does this change stay
-local?"). Those are graph computations, not similarity searches — a vector DB
+local?"). Those are graph computations, not similarity searches - a vector DB
 cannot traverse, and traversal is the product.
 
 Code-Graph (FalkorDB's own repo indexer) answers questions *about* code. Wry
@@ -182,7 +182,7 @@ action is the difference.
   not necessarily the riskiest semantic change.
 - `IMPORTS` edges are module-to-module only, in both the demo graph and the
   local indexer (test files connect to modules via `COVERS`). Graph algorithms
-  over `IMPORTS` — PageRank, betweenness, CDLP — therefore never see test
+  over `IMPORTS` - PageRank, betweenness, CDLP - therefore never see test
   nodes, and test files cannot shape module communities or centrality scores.
 - CDLP community ids are non-deterministic across runs (random processing
   order); the grouping structure is stable, the numeric labels are not.
@@ -190,7 +190,7 @@ action is the difference.
   the active repository; with several indexed repositories the scores are
   relative to the whole graph.
 - The agent's tool router is rule-based by default; model-assisted selection is
-  opt-in and still constrained to the read-only allowlist — the model never
+  opt-in and still constrained to the read-only allowlist - the model never
   writes Cypher.
 - Local repository indexing is metadata-only and off by default; it is the
   operator's responsibility to enable it only for public or otherwise
@@ -238,11 +238,11 @@ The unit tests use a fake graph and do not require FalkorDB credentials. A live 
 
 ## AI assistance disclosure
 
-Wry was designed and built by the participant: the original codebase, every feature choice, every design decision, and every verification step. The participant reviewed each AI-produced change line by line \u2014 those reviews caught the remaining bugs (approval-token bypass holes, missing PATH TO handling, demo-only evaluation scope, test-file `IMPORTS` edges) \u2014 and ran the test suite and live verifications. Muse (Meta's personal AI agent) assisted with implementation at the participant's request, in two areas:
+Wry was designed and built by the participant: the original codebase, every feature choice, every design decision, and every verification step. The participant reviewed each AI-produced change line by line - those reviews caught the remaining bugs (approval-token bypass holes, missing PATH TO handling, demo-only evaluation scope, test-file `IMPORTS` edges) - and ran the test suite and live verifications. Muse (Meta's personal AI agent) assisted with implementation at the participant's request, in two areas:
 
-**1. Independent review (Oct 15, 2026).** Reviewed the participant's codebase against the official hackathon rules \u2014 verifying the "4 importers / 5 tests / 62% surface" claims against the fixture data, the new-work rule, and the privacy gate \u2014 plus a live review of the running app against the Track 1 "Agents That Act on Connected Data" bar.
+**1. Independent review (Oct 15, 2026).** Reviewed the participant's codebase against the official hackathon rules - verifying the "4 importers / 5 tests / 62% surface" claims against the fixture data, the new-work rule, and the privacy gate - plus a live review of the running app against the Track 1 "Agents That Act on Connected Data" bar.
 
-**2. Implementation assistance (Oct 15\u201316, 2026).** The participant chose and specified each improvement; Muse wrote the code: the bounded Thought \u2192 Action \u2192 Observation agent loop (`POST /api/agent/run`); FalkorDB-backed agent memory (`Investigation` nodes); the MCP tool set including the named graph-algorithm tools \u2014 PageRank test ranking, betweenness bridge detection, CDLP blast-radius communities, shortest dependency path; the proposal/approval token lifecycle for plan writes (server-enforced, single-use); the expected-results evaluation endpoint and its UI panel; the "Impact Dossier" UI redesign to the participant's direction; the impact-map visualization; and README hardening (kill test, why-not-vector-DB rationale, Limitations). The participant reviewed every change; the final result was live-verified against FalkorDB Cloud (62/62 tests, 7/7 evaluation). Muse also drafted the demo video's narration script; the voiceover is the participant's own recording.
+**2. Implementation assistance (Oct 15-16, 2026).** The participant chose and specified each improvement; Muse wrote the code: the bounded Thought -> Action -> Observation agent loop (`POST /api/agent/run`); FalkorDB-backed agent memory (`Investigation` nodes); the MCP tool set including the named graph-algorithm tools - PageRank test ranking, betweenness bridge detection, CDLP blast-radius communities, shortest dependency path; the proposal/approval token lifecycle for plan writes (server-enforced, single-use); the expected-results evaluation endpoint and its UI panel; the "Impact Dossier" UI redesign to the participant's direction; the impact-map visualization; and README hardening (kill test, why-not-vector-DB rationale, Limitations). The participant reviewed every change; the final result was live-verified against FalkorDB Cloud (62/62 tests, 7/7 evaluation). Muse also drafted the demo video's narration script; the voiceover is the participant's own recording.
 
 ## Submission notes
 
