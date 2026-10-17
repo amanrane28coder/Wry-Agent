@@ -29,10 +29,10 @@ Official checklist: [Graph Hacks rules](https://www.wemakedevs.org/hackathons/fa
 ## Still required from the participant
 
 - [x] Connect an authorized FalkorDB Cloud instance and run a live end-to-end impact trace.
-- [ ] Save a proposed test plan and verify the saved graph action in FalkorDB Browser.
-- [ ] Create a public source repository and confirm `.env` is not tracked.
-- [ ] Record and review a demo video showing real FalkorDB responses, MCP selection, explainability, and the approval-gated write.
+- [x] Save a proposed test plan and verify the saved graph action in FalkorDB Browser (verified: 7 TestPlan nodes; latest targets src/core/token_store.py with REVIEW + RUN edges).
+- [x] Create a public source repository and confirm `.env` is not tracked (https://github.com/amanrane28coder/Wry-Agent; sensitive-info sweep clean, real `.env` gitignored).
+- [x] Record and review a demo video showing real FalkorDB responses, MCP selection, explainability, and the approval-gated write (final 2:26 video with the participant's own voiceover, approved).
 - [ ] Add an accurate disclosure of AI coding tools used and make sure you can explain the full implementation.
-- [ ] Confirm registration, selected track, and final submission in the official WeMakeDevs event panel before the deadline.
+- [ ] Final submission in the official WeMakeDevs event panel before the deadline (registration confirmed: solo, Track 1).
 
 Do not mark an item complete based only on a unit test or a mocked graph response.

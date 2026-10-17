@@ -687,6 +687,18 @@ class GraphAgentTests(unittest.TestCase):
         self.assertEqual(select_analysis_tool("have we investigated this module before?")[0],
                          "recall_investigations_tool")
 
+    def test_request_router_routes_impact_question_to_trace_not_list(self):
+        from main import select_analysis_tool
+
+        # Regression: "show"/"files" must not hijack an impact question into a
+        # module listing -- impact/change words beat the list rule.
+        tool, _, _ = select_analysis_tool(
+            "Show me which files are affected by changing auth_service")
+        self.assertEqual(tool, "trace_change_impact_tool")
+        # ... while plain listing prompts still list.
+        self.assertEqual(select_analysis_tool("show me the available modules")[0],
+                         "list_code_targets")
+
     def test_model_choice_allows_pagerank_tool(self):
         from main import choose_analysis_tool
 
@@ -739,6 +751,56 @@ class GraphAgentTests(unittest.TestCase):
         self.assertIn("2 of them", result["final_answer"])
         # the blast-radius analysis is merged into the display result for the UI
         self.assertEqual(result["result"]["communities"]["impacted_communities"], 2)
+
+    def test_agent_loop_returns_recall_result_for_memory_panel(self):
+        from main import run_agent_loop
+
+        async def fake_call_tool(name, arguments):
+            if name == "trace_change_impact_tool":
+                return {"target": "src/core/token_store.py", "impact_count": 4,
+                        "affected_files": [], "recommended_tests": [{"path": "tests/test_a.py"}],
+                        "change_surface_score": 38, "tool": "trace_change_impact",
+                        "cypher": {"trace": "MATCH (t:File)<-[:IMPORTS*1..5]-(d:File)"},
+                        "timings": {"trace_ms": 3}}
+            if name == "rank_tests_pagerank_tool":
+                return {"target": "src/core/token_store.py",
+                        "ranked_tests": [{"path": "tests/test_a.py", "pagerank_score": 0.35}],
+                        "change_surface_score": 38, "tool": "rank_tests_pagerank",
+                        "cypher": {"pagerank": "CALL algo.pageRank"},
+                        "timings": {"pagerank_ms": 4}}
+            if name == "find_impact_communities_tool":
+                return {"target": "src/core/token_store.py", "impacted_communities": 2,
+                        "tool": "find_impact_communities",
+                        "cypher": {"communities": "CALL algo.labelPropagation"},
+                        "timings": {"communities_ms": 5}}
+            if name == "recall_investigations_tool":
+                return {"target": "src/core/token_store.py", "investigation_count": 1,
+                        "investigations": [{"created_at": 1, "tool": "trace_change_impact_tool",
+                                            "importer_count": 4, "test_count": 1,
+                                            "top_test": "tests/test_a.py", "summary": "earlier look"}],
+                        "tool": "recall_investigations",
+                        "cypher": {"recall": "MATCH (i:Investigation)"},
+                        "timings": {"recall_ms": 2}}
+            raise AssertionError(f"unexpected tool call: {name}")
+
+        with patch("main.call_mcp_tool", side_effect=fake_call_tool), \
+                patch("main.record_investigation", return_value="inv-1"):
+            result = asyncio.run(run_agent_loop(
+                "Investigate the change and rank the riskiest tests",
+                "src/core/token_store.py"))
+
+        actions = [step["action"] for step in result["steps"]]
+        self.assertEqual(actions, ["trace_change_impact_tool", "rank_tests_pagerank_tool",
+                                  "find_impact_communities_tool", "recall_investigations_tool"])
+        # the recall payload is returned separately so the loop response can
+        # drive the AGENT MEMORY panel -- not just the trace observation
+        self.assertEqual(result["past_investigations"]["tool"], "recall_investigations")
+        self.assertEqual(result["past_investigations"]["investigation_count"], 1)
+        # and its Cypher/timings merge into the display result for GRAPH QUERY,
+        # while the primary investigation payload stays the display result
+        self.assertEqual(result["result"]["tool"], "rank_tests_pagerank")
+        self.assertIn("recall", result["result"]["cypher"])
+        self.assertIn("recall_ms", result["result"]["timings"])
 
     def test_agent_loop_listing_is_single_step(self):
         from main import run_agent_loop

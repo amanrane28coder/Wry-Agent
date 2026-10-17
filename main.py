@@ -102,6 +102,13 @@ def select_analysis_tool(prompt: str):
         return "recall_investigations_tool", None, "The request asks about past work; recall the agent's investigation history from FalkorDB."
     if words.intersection({"rank", "ranking", "ranked", "riskiest", "prioritize", "prioritise", "priority"}):
         return "rank_tests_pagerank_tool", None, "The request asks to rank or prioritize tests; use PageRank over the import graph in FalkorDB."
+    # Impact/change questions beat the module-list rule: "show me which files
+    # are affected by changing X" is a change investigation, not a listing.
+    if words.intersection({"affect", "affects", "affected", "affecting",
+                           "impact", "impacts", "impacted",
+                           "change", "changes", "changing", "changed",
+                           "break", "breaks", "breaking"}):
+        return "trace_change_impact_tool", None, "The request asks about the impact of a change; trace dependents and covering tests in FalkorDB."
     if words.intersection({"list", "show", "available", "modules", "files", "targets"}):
         return "list_code_targets", {}, "The request asks for the available code targets."
     return "trace_change_impact_tool", None, "The request asks about a change; trace dependents and covering tests in FalkorDB."
@@ -578,11 +585,27 @@ async def run_agent_loop(prompt: str, target_path: str, other_path: str | None =
             "timings": {**(display_result.get("timings") or {}),
                         **(communities_result.get("timings") or {})},
         }
+    if (recall_result is not None and isinstance(display_result, dict)
+            and display_result.get("tool") != "recall_investigations"):
+        # The memory read belongs next to the investigation in the UI: its
+        # Cypher and timings merge into the display result so the GRAPH QUERY
+        # panel stays honest. (When recall was the loop's own first tool, the
+        # payload is already the display result -- no merge needed.)
+        display_result = {
+            **display_result,
+            "cypher": {**(display_result.get("cypher") or {}),
+                       **(recall_result.get("cypher") or {})},
+            "timings": {**(display_result.get("timings") or {}),
+                        **(recall_result.get("timings") or {})},
+        }
     return {
         "steps": steps,
         "final_answer": final_answer,
         "proposed_action": proposed_action,
         "result": display_result,
+        # The recall payload, returned separately so the loop response can
+        # drive the AGENT MEMORY panel -- not just the trace observation.
+        "past_investigations": recall_result,
     }
 
 

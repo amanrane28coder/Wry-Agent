@@ -235,7 +235,11 @@
     } : payload.result;
     $("#empty-state").hidden = true;
     $("#results").hidden = false;
-    $("#result-target").textContent = result.target || result.from || "Available code modules";
+    const isChain = !listing && (tool === "shortest_dependency_path_tool" || result.tool === "shortest_dependency_path");
+    const isBridges = !listing && (tool === "find_bridge_modules_tool" || result.tool === "find_bridge_modules");
+    // Bridge results are a global overview with no target module; the generic
+    // fallback heading would mislead, so they get their own title.
+    $("#result-target").textContent = result.target || result.from || (isBridges ? "Architectural choke points" : "Available code modules");
     if (isLoop) {
       $("#selected-tool").textContent = `AGENT LOOP · ${payload.steps.length} STEPS · MCP TOOLS`;
       $("#selection-reason").textContent = "The agent chained tools itself. Each step's thought, action, and observation is shown below.";
@@ -247,8 +251,6 @@
     renderFinalAnswer(payload.final_answer);
     renderProposedAction(payload.proposed_action);
 
-    const isChain = !listing && (tool === "shortest_dependency_path_tool" || result.tool === "shortest_dependency_path");
-    const isBridges = !listing && (tool === "find_bridge_modules_tool" || result.tool === "find_bridge_modules");
     const isCommunities = !listing && (tool === "find_impact_communities_tool" || result.tool === "find_impact_communities");
     const isRecall = !listing && result.tool === "recall_investigations";
     const showStandard = !listing && !isChain && !isBridges && !isCommunities && !isRecall;
