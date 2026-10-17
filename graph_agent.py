@@ -237,6 +237,13 @@ def scan_local_repository(root: Path):
 
     source_paths.sort()
     relative_paths = {path: path.relative_to(root).as_posix() for path in source_paths}
+    test_relatives = {
+        relative
+        for path, relative in relative_paths.items()
+        if path.name.startswith("test_")
+        or path.name.endswith("_test.py")
+        or "tests" in path.relative_to(root).parts
+    }
     module_paths = {}
     for path, relative in relative_paths.items():
         module_paths[_module_name(Path(relative))] = relative
@@ -250,7 +257,7 @@ def scan_local_repository(root: Path):
     test_edges = set()
     for path in source_paths:
         relative = relative_paths[path]
-        is_test = path.name.startswith("test_") or path.name.endswith("_test.py") or "tests" in path.relative_to(root).parts
+        is_test = relative in test_relatives
         try:
             source = path.read_text(encoding="utf-8")
             tree = ast.parse(source, filename=relative)
@@ -268,9 +275,14 @@ def scan_local_repository(root: Path):
             # IMPORTS edges are module-to-module only, matching the demo data
             # model. Test files connect to modules via COVERS edges instead, so
             # test nodes never shape module-level graph algorithms (PageRank,
-            # betweenness, CDLP communities) that run over IMPORTS.
+            # betweenness, CDLP communities) that run over IMPORTS. This holds
+            # in both directions: test files never emit IMPORTS edges, and a
+            # module importing a test helper emits no IMPORTS edge to the test
+            # file (the data model has no relationship for that direction).
             if is_test:
                 test_edges.add((relative, dependency))
+            elif dependency in test_relatives:
+                continue
             else:
                 import_edges.add((relative, dependency))
 

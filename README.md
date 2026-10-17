@@ -238,7 +238,7 @@ The unit tests use a fake graph and do not require FalkorDB credentials. A live 
 
 ## AI assistance disclosure
 
-Wry was designed and built by the participant: the original codebase, every feature choice, every design decision, and every verification step. The participant reviewed each AI-produced change line by line - those reviews caught the remaining bugs (approval-token bypass holes, missing PATH TO handling, demo-only evaluation scope, test-file `IMPORTS` edges) - and ran the test suite and live verifications. Muse (Meta's personal AI agent) assisted with implementation at the participant's request, in two areas:
+Wry was designed and built by the participant: the original codebase, every feature choice, every design decision, and every verification step. The participant reviewed each AI-produced change line by line - those reviews caught the remaining bugs (approval-token bypass holes, missing PATH TO handling, demo-only evaluation scope, test-file `IMPORTS` edges in both directions) - and ran the test suite and live verifications. Muse (Meta's personal AI agent) assisted with implementation at the participant's request, in two areas:
 
 **1. Independent review (Oct 15, 2026).** Reviewed the participant's codebase against the official hackathon rules - verifying the "4 importers / 5 tests / 62% surface" claims against the fixture data, the new-work rule, and the privacy gate - plus a live review of the running app against the Track 1 "Agents That Act on Connected Data" bar.
 

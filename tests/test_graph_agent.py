@@ -168,6 +168,29 @@ class GraphAgentTests(unittest.TestCase):
         self.assertIn(("tests/test_core.py", "pkg/core.py"), covers)
         self.assertTrue(all(not importer.startswith("tests/") for importer, _ in imports))
 
+    def test_local_scanner_excludes_test_helpers_imported_by_modules(self):
+        # Reverse direction of the module-to-module invariant: a source
+        # module importing a test helper must not emit an IMPORTS edge to
+        # the test file, or test nodes would shape IMPORTS-based graph
+        # algorithms (PageRank, betweenness, CDLP communities).
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "pkg").mkdir()
+            (root / "tests").mkdir()
+            (root / "pkg" / "core.py").write_text(
+                "from tests.helpers import make_token\ndef token():\n    return make_token()\n"
+            )
+            (root / "tests" / "helpers.py").write_text("def make_token():\n    return 1\n")
+
+            _, imports, covers = graph_agent.scan_local_repository(root)
+
+        self.assertNotIn(("pkg/core.py", "tests/helpers.py"), imports)
+        self.assertNotIn(("pkg/core.py", "tests/helpers.py"), covers)
+        self.assertTrue(all(
+            not importer.startswith("tests/") and not dependency.startswith("tests/")
+            for importer, dependency in imports
+        ))
+
     def test_local_index_writes_repository_metadata_and_activates_it(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
