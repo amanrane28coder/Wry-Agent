@@ -1272,7 +1272,8 @@ class GraphAgentTests(unittest.TestCase):
             result = graph_agent.create_test_plan_tool(
                 "src/core/token_store.py", "Review", proposal_token=token)
         mock_write.assert_called_once_with("src/core/token_store.py", "Review",
-                                           approved_tests=["tests/test_a.py"])
+                                           approved_tests=["tests/test_a.py"],
+                                           test_order="pagerank")
         self.assertTrue(result["saved"])
         # the token was consumed: a replay is refused
         with self.assertRaises(graph_agent.PlanApprovalError):
@@ -1360,6 +1361,71 @@ class GraphAgentTests(unittest.TestCase):
         self.assertEqual(result["tests_to_run"], ["tests/test_reviewed.py"])
         _, params = graph.writes[-1]
         self.assertEqual(params["test_paths"], ["tests/test_reviewed.py"])
+
+    def test_investigate_issues_no_plan_token_without_tests(self):
+        # A bridge result carries no test list: no approval token may be
+        # issued, so the save path cannot persist an empty plan.
+        from main import InvestigateRequest, investigate
+
+        async def fake_call_tool(name, arguments):
+            return {"bridges": [{"path": "src/core/auth_service.py",
+                                 "betweenness_score": 12.5}],
+                    "tool": "find_bridge_modules"}
+
+        with patch("main.choose_analysis_tool",
+                   return_value=("find_bridge_modules_tool", {}, "choke points", "rules")), \
+                patch("main.call_mcp_tool", side_effect=fake_call_tool), \
+                patch("main.record_investigation", return_value="inv-1"), \
+                patch("main.recall_investigations",
+                      return_value={"investigation_count": 0, "investigations": []}):
+            response = asyncio.run(investigate(InvestigateRequest(
+                prompt="show me the choke points", target_path="src/core/token_store.py")))
+
+        self.assertNotIn("plan_proposal_token", response)
+
+    def test_plan_preserves_trace_ordering_label(self):
+        # A trace-only proposal was never PageRank-ranked: the saved plan
+        # must report its actual ordering, not "pagerank".
+        graph = FakeGraph(
+            path_rows=[("src/core/auth_service.py", "high", 1,
+                        ["src/core/auth_service.py", "src/core/token_store.py"])],
+            test_rows=[("tests/test_auth_service.py", ["src/core/token_store.py"])],
+        )
+        with patch.object(graph_agent, "get_graph", return_value=graph):
+            token = graph_agent._issue_plan_approval(
+                "src/core/token_store.py", ["tests/test_auth_service.py"],
+                test_order="trace")
+            graph_agent._approve_plan_proposal(token, "src/core/token_store.py")
+            result = graph_agent.create_test_plan_tool(
+                "src/core/token_store.py", "review", token)
+        self.assertEqual(result["test_order"], "trace")
+        self.assertEqual(result["tests_to_run"], ["tests/test_auth_service.py"])
+
+    def test_agent_loop_proposes_no_plan_without_tests(self):
+        # wants_plan with an empty test list: no proposal, no token, so the
+        # save button stays disabled instead of offering an empty plan.
+        from main import run_agent_loop
+
+        async def fake_call_tool(name, arguments):
+            if name == "trace_change_impact_tool":
+                return {"target": "src/core/token_store.py", "impact_count": 0,
+                        "affected_files": [], "recommended_tests": [],
+                        "tool": "trace_change_impact"}
+            if name == "find_impact_communities_tool":
+                return {"target": "src/core/token_store.py", "impacted_communities": 0,
+                        "tool": "find_impact_communities"}
+            if name == "recall_investigations_tool":
+                return {"investigation_count": 0, "investigations": []}
+            raise AssertionError(f"unexpected tool call: {name}")
+
+        with patch("main.call_mcp_tool", side_effect=fake_call_tool), \
+                patch("main.record_investigation", return_value="inv-1"):
+            result = asyncio.run(run_agent_loop(
+                "Investigate the change and save a plan", "src/core/token_store.py"))
+
+        self.assertIsNone(result["proposed_action"])
+        self.assertNotIn("proposed:create_test_plan_tool",
+                         [step["action"] for step in result["steps"]])
 
     def test_mcp_server_creation_emits_no_incomplete_field_warning(self):
         # Regression: pydantic-settings emitted IncompleteFieldDefinitionWarning

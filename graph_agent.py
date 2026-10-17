@@ -507,8 +507,12 @@ _PLAN_APPROVALS: dict[str, dict] = {}
 _PLAN_APPROVAL_TTL_SECONDS = 15 * 60
 
 
-def _issue_plan_approval(target_path: str, tests: list[str]) -> str:
-    """Issue a *proposal* token. Not usable for writing until approved."""
+def _issue_plan_approval(target_path: str, tests: list[str], test_order: str = "pagerank") -> str:
+    """Issue a *proposal* token. Not usable for writing until approved.
+
+    test_order records how the proposed tests were ordered ("pagerank" or
+    "trace") so the saved plan can report it truthfully.
+    """
     now = time.time()
     # Prune expired tokens so the store cannot grow unboundedly.
     for token in [t for t, rec in _PLAN_APPROVALS.items() if rec["expires_at"] <= now]:
@@ -518,6 +522,7 @@ def _issue_plan_approval(target_path: str, tests: list[str]) -> str:
         "tool": "create_test_plan_tool",
         "target_path": target_path,
         "tests": list(tests),
+        "test_order": test_order,
         "status": "proposed",
         "expires_at": now + _PLAN_APPROVAL_TTL_SECONDS,
     }
@@ -559,7 +564,7 @@ def _consume_plan_approval(token: str, target_path: str) -> dict:
 
 
 def create_test_plan(target_path: str, rationale: str = "Change impact review",
-                     approved_tests: list | None = None):
+                     approved_tests: list | None = None, test_order: str = "pagerank"):
     """Persist a proposed test plan. When approved_tests is given - the exact
     list the user reviewed and approved - it is saved verbatim instead of
     being recomputed, so the saved plan can never differ from what was shown.
@@ -592,7 +597,7 @@ def create_test_plan(target_path: str, rationale: str = "Change impact review",
         "target": target_path,
         "files_to_review": len(ranking["affected_files"]),
         "tests_to_run": test_paths,
-        "test_order": "pagerank",
+        "test_order": test_order,
         "action": "Saved a proposed test plan to FalkorDB. Tests are ordered by PageRank importance of the impacted modules they cover. No code was changed and no tests were executed.",
     }
 
@@ -1144,4 +1149,6 @@ def create_test_plan_tool(target_path: str, rationale: str = "Change impact revi
     Requires a proposal token that the user has approved via POST /api/agent/test-plan; a merely proposed (unapproved) token, or none at all, is refused before any write.
     """
     record = _consume_plan_approval(proposal_token, target_path)
-    return create_test_plan(target_path, rationale, approved_tests=record["tests"])
+    return create_test_plan(target_path, rationale,
+                            approved_tests=record["tests"],
+                            test_order=record.get("test_order", "pagerank"))

@@ -133,7 +133,7 @@
       latestTarget = Array.isArray(payload.result) ? null : target.value;
       planProposalToken = payload.plan_proposal_token || null;
       renderResult(payload);
-      saveButton.disabled = !latestTarget || !!payload.needs_input;
+      saveButton.disabled = !latestTarget || !!payload.needs_input || !planProposalToken;
       $("#query-message").textContent = "Graph traversal complete";
     } catch (error) {
       $("#query-message").textContent = error.message;
@@ -158,7 +158,7 @@
       latestTarget = target.value;
       planProposalToken = (payload.proposed_action && payload.proposed_action.proposal_token) || null;
       renderResult(payload);
-      saveButton.disabled = !latestTarget || !!payload.needs_input;
+      saveButton.disabled = !latestTarget || !!payload.needs_input || !planProposalToken;
       $("#query-message").textContent = `Agent finished in ${payload.steps.length} step${payload.steps.length === 1 ? "" : "s"}`;
     } catch (error) {
       $("#query-message").textContent = error.message;

@@ -346,12 +346,21 @@ async def investigate(request: InvestigateRequest):
     if not isinstance(result, list):
         # Issue a server-side approval for the plan the SAVE TEST PLAN button
         # would write. The write endpoint only executes with this token.
-        proposed_tests = []
+        # No token when there is nothing to save: results without a test
+        # list (bridges, paths, recall) cannot produce a plan.
+        proposed_tests: list[str] = []
+        test_order = "pagerank"
         if isinstance(result, dict):
             ranked = result.get("ranked_tests") or []
             traced = result.get("recommended_tests") or []
-            proposed_tests = [t["path"] for t in ranked] or [t["path"] for t in traced]
-        response["plan_proposal_token"] = _issue_plan_approval(request.target_path, proposed_tests)
+            if ranked:
+                proposed_tests = [t["path"] for t in ranked]
+            elif traced:
+                proposed_tests = [t["path"] for t in traced]
+                test_order = "trace"
+        if proposed_tests:
+            response["plan_proposal_token"] = _issue_plan_approval(
+                request.target_path, proposed_tests, test_order=test_order)
     return response
 
 
@@ -544,25 +553,31 @@ async def run_agent_loop(prompt: str, target_path: str, other_path: str | None =
             "recall_investigations_tool", {"target_path": target_path},
         )
     if wants_plan and len(steps) < max_steps:
-        tests_preview: list[str] = []
         ranked = (rank_result.get("ranked_tests") or []) if isinstance(rank_result, dict) else []
         traced = (trace_result.get("recommended_tests") or []) if isinstance(trace_result, dict) else []
         tests_preview = [t["path"] for t in ranked] or [t["path"] for t in traced]
-        proposed_action = {
-            "tool": "create_test_plan_tool",
-            "arguments": {"target_path": target_path, "rationale": prompt[:500]},
-            "tests": tests_preview,
-            "proposal_token": _issue_plan_approval(target_path, tests_preview),
-            "message": ("The request asks to save a plan. I'm proposing the ranked test plan "
-                        "below — nothing is written until you approve it."),
-        }
-        steps.append({
-            "step": len(steps) + 1,
-            "thought": ("The request asks to save a plan. I will not write to the graph on my "
-                        "own — I'll propose the plan and wait for approval."),
-            "action": "proposed:create_test_plan_tool",
-            "observation": f"Proposed a test plan with {len(tests_preview)} tests, ordered by PageRank importance.",
-        })
+        # No proposal when there is nothing to save: the save button stays
+        # disabled and no approval token is issued for an empty test list.
+        if tests_preview:
+            test_order = "pagerank" if ranked else "trace"
+            order_phrase = "ordered by PageRank importance" if ranked else "in trace order"
+            proposed_action = {
+                "tool": "create_test_plan_tool",
+                "arguments": {"target_path": target_path, "rationale": prompt[:500]},
+                "tests": tests_preview,
+                "test_order": test_order,
+                "proposal_token": _issue_plan_approval(target_path, tests_preview,
+                                                       test_order=test_order),
+                "message": ("The request asks to save a plan. I'm proposing the test plan "
+                            "below — nothing is written until you approve it."),
+            }
+            steps.append({
+                "step": len(steps) + 1,
+                "thought": ("The request asks to save a plan. I will not write to the graph on my "
+                            "own — I'll propose the plan and wait for approval."),
+                "action": "proposed:create_test_plan_tool",
+                "observation": f"Proposed a test plan with {len(tests_preview)} tests, {order_phrase}.",
+            })
 
     final_answer = _compose_final_answer(target_path, steps, observations, proposed_action)
     # Record the investigation for the primary (displayed) result, in the
