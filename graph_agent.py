@@ -591,6 +591,8 @@ def create_test_plan(target_path: str, rationale: str = "Change impact review",
             "test_paths": test_paths,
         },
     )
+    order_note = ("Tests are ordered by PageRank importance of the impacted modules they cover."
+                  if test_order == "pagerank" else "Tests are in trace order.")
     return {
         "saved": True,
         "plan_id": plan_id,
@@ -598,7 +600,8 @@ def create_test_plan(target_path: str, rationale: str = "Change impact review",
         "files_to_review": len(ranking["affected_files"]),
         "tests_to_run": test_paths,
         "test_order": test_order,
-        "action": "Saved a proposed test plan to FalkorDB. Tests are ordered by PageRank importance of the impacted modules they cover. No code was changed and no tests were executed.",
+        "action": (f"Saved a proposed test plan to FalkorDB. {order_note} "
+                   "No code was changed and no tests were executed."),
     }
 
 

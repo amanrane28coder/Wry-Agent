@@ -98,6 +98,7 @@ class GraphAgentTests(unittest.TestCase):
         self.assertTrue(result["saved"])
         self.assertEqual(result["tests_to_run"], ["tests/test_auth_service.py"])
         self.assertEqual(result["test_order"], "pagerank")
+        self.assertIn("PageRank", result["action"])
         plan_query, plan_params = graph.writes[-1]
         self.assertIn("TestPlan", plan_query)
         self.assertIn("REVIEW", plan_query)
@@ -1400,6 +1401,8 @@ class GraphAgentTests(unittest.TestCase):
                 "src/core/token_store.py", "review", token)
         self.assertEqual(result["test_order"], "trace")
         self.assertEqual(result["tests_to_run"], ["tests/test_auth_service.py"])
+        self.assertIn("trace order", result["action"])
+        self.assertNotIn("PageRank", result["action"])
 
     def test_agent_loop_proposes_no_plan_without_tests(self):
         # wants_plan with an empty test list: no proposal, no token, so the
