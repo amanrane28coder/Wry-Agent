@@ -558,8 +558,15 @@ def _consume_plan_approval(token: str, target_path: str) -> dict:
     return record
 
 
-def create_test_plan(target_path: str, rationale: str = "Change impact review"):
+def create_test_plan(target_path: str, rationale: str = "Change impact review",
+                     approved_tests: list | None = None):
+    """Persist a proposed test plan. When approved_tests is given - the exact
+    list the user reviewed and approved - it is saved verbatim instead of
+    being recomputed, so the saved plan can never differ from what was shown.
+    """
     ranking = rank_tests_by_pagerank(target_path)
+    test_paths = list(approved_tests) if approved_tests is not None else [
+        item["path"] for item in ranking["ranked_tests"]]
     graph = get_graph()
     plan_id = str(uuid.uuid4())
     graph.query(
@@ -576,7 +583,7 @@ def create_test_plan(target_path: str, rationale: str = "Change impact review"):
             "target": target_path,
             "rationale": rationale[:500],
             "review_paths": [item["path"] for item in ranking["affected_files"]],
-            "test_paths": [item["path"] for item in ranking["ranked_tests"]],
+            "test_paths": test_paths,
         },
     )
     return {
@@ -584,7 +591,7 @@ def create_test_plan(target_path: str, rationale: str = "Change impact review"):
         "plan_id": plan_id,
         "target": target_path,
         "files_to_review": len(ranking["affected_files"]),
-        "tests_to_run": [item["path"] for item in ranking["ranked_tests"]],
+        "tests_to_run": test_paths,
         "test_order": "pagerank",
         "action": "Saved a proposed test plan to FalkorDB. Tests are ordered by PageRank importance of the impacted modules they cover. No code was changed and no tests were executed.",
     }
@@ -1136,5 +1143,5 @@ def create_test_plan_tool(target_path: str, rationale: str = "Change impact revi
 
     Requires a proposal token that the user has approved via POST /api/agent/test-plan; a merely proposed (unapproved) token, or none at all, is refused before any write.
     """
-    _consume_plan_approval(proposal_token, target_path)
-    return create_test_plan(target_path, rationale)
+    record = _consume_plan_approval(proposal_token, target_path)
+    return create_test_plan(target_path, rationale, approved_tests=record["tests"])

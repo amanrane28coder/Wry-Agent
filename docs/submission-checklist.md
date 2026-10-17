@@ -20,7 +20,7 @@ Official checklist: [Graph Hacks rules](https://www.wemakedevs.org/hackathons/fa
 - [x] PageRank expected-results case in RUN EVALUATION (top-ranked test must cover the highest-PageRank impacted module; scores descending).
 - [x] Saved test plans order tests by PageRank importance (`test_order: pagerank` in the plan response).
 - [x] IMPACT MAP visualization of dependency paths (target → importers by hop, change-propagation edges) in the results UI.
-- [x] Specific AI assistance disclosure in the README enumerating all five rounds of AI-assisted work; participant must verify accuracy and add any AI tools they used themselves.
+- [x] Specific AI assistance disclosure in the README (grouped two-section summary, participant-centered); participant must verify accuracy and add any AI tools they used themselves.
 - [x] Agent loop: bounded Thought → Action → Observation loop (`POST /api/agent/run`) chaining MCP tools with a visible AGENT TRACE timeline; write action proposed, never auto-executed (approval card).
 - [x] Agent memory: investigations recorded as `Investigation` nodes in FalkorDB; `recall_investigations_tool` reads history back; AGENT MEMORY section in UI.
 - [x] Two more graph algorithms as MCP tools: `find_bridge_modules_tool` (`algo.betweenness`) and `shortest_dependency_path_tool` (shortest directed IMPORTS chain), wired through router + model allowlist, surfaced in UI.

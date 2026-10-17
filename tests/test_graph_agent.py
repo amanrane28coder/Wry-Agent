@@ -1271,7 +1271,8 @@ class GraphAgentTests(unittest.TestCase):
                           return_value={"saved": True, "plan_id": "abc"}) as mock_write:
             result = graph_agent.create_test_plan_tool(
                 "src/core/token_store.py", "Review", proposal_token=token)
-        mock_write.assert_called_once_with("src/core/token_store.py", "Review")
+        mock_write.assert_called_once_with("src/core/token_store.py", "Review",
+                                           approved_tests=["tests/test_a.py"])
         self.assertTrue(result["saved"])
         # the token was consumed: a replay is refused
         with self.assertRaises(graph_agent.PlanApprovalError):
@@ -1338,6 +1339,27 @@ class GraphAgentTests(unittest.TestCase):
         mock_record.assert_called_once()
         summary = mock_record.call_args[0][2]
         self.assertIn("auth_service", summary["text"])
+
+    def test_approved_plan_persists_reviewed_test_list(self):
+        # The approval gate must save exactly what the user reviewed: the
+        # token stores the approved test list, and the save must persist it
+        # verbatim even if the graph would now rank differently.
+        graph = FakeGraph(
+            path_rows=[("src/core/auth_service.py", "high", 1,
+                        ["src/core/auth_service.py", "src/core/token_store.py"])],
+            test_rows=[("tests/test_auth_service.py", ["src/core/token_store.py"])],
+        )
+        with patch.object(graph_agent, "get_graph", return_value=graph):
+            token = graph_agent._issue_plan_approval(
+                "src/core/token_store.py", ["tests/test_reviewed.py"])
+            graph_agent._approve_plan_proposal(token, "src/core/token_store.py")
+            result = graph_agent.create_test_plan_tool(
+                "src/core/token_store.py", "review", token)
+        # the graph would recompute tests/test_auth_service.py, but the
+        # approved snapshot (tests/test_reviewed.py) is what gets saved
+        self.assertEqual(result["tests_to_run"], ["tests/test_reviewed.py"])
+        _, params = graph.writes[-1]
+        self.assertEqual(params["test_paths"], ["tests/test_reviewed.py"])
 
     def test_mcp_server_creation_emits_no_incomplete_field_warning(self):
         # Regression: pydantic-settings emitted IncompleteFieldDefinitionWarning
