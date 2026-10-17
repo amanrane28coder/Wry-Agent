@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 from urllib.error import URLError
-from urllib.request import Request, urlopen
+from urllib.request import urlopen, Request as UrlRequest
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
@@ -237,7 +237,7 @@ async def choose_analysis_tool(prompt: str):
 
 
 def _request_tool_selection(base_url: str, payload: dict):
-    request = Request(
+    request = UrlRequest(
         f"{base_url}/chat/completions",
         data=json.dumps(payload).encode("utf-8"),
         headers={
@@ -367,6 +367,26 @@ def _summarize_for_memory(tool_name: str, result: dict) -> dict:
                     f"{result.get('hops', '?')} hops via {' -> '.join(chain)}."
                     if result.get("connected") else
                     f"No dependency path from {result.get('from')} to {result.get('to')}.",
+        }
+    if tool_name == "find_bridge_modules_tool":
+        bridges = result.get("bridges", [])
+        top = bridges[0]["path"] if bridges else "none"
+        return {
+            "importer_count": 0,
+            "test_count": 0,
+            "top_test": "",
+            "text": (f"Top architectural choke point is {top} "
+                     f"({len(bridges)} modules scored by betweenness)."),
+        }
+    if tool_name == "find_bridge_modules_tool":
+        bridges = result.get("bridges", [])
+        top = bridges[0]["path"] if bridges else "none"
+        return {
+            "importer_count": 0,
+            "test_count": 0,
+            "top_test": "",
+            "text": (f"Top architectural choke point is {top} "
+                     f"({len(bridges)} modules scored by betweenness)."),
         }
     if tool_name == "find_impact_communities_tool":
         return {
@@ -555,11 +575,25 @@ async def run_agent_loop(prompt: str, target_path: str, other_path: str | None =
         })
 
     final_answer = _compose_final_answer(target_path, steps, observations, proposed_action)
-    if trace_result is not None:
+    # Record the investigation for whichever analysis produced the primary
+    # result: a communities-first or shortest-path run recalls history too,
+    # so it should leave its own finding in memory. Pure recall runs and
+    # listings produce no new finding, so they record nothing.
+    memory_tool, memory_result = None, None
+    for candidate_tool, candidate_result in (
+            ("trace_change_impact_tool", trace_result),
+            ("rank_tests_pagerank_tool", rank_result),
+            ("find_impact_communities_tool", communities_result),
+            ("shortest_dependency_path_tool", shortest_path_result),
+            ("find_bridge_modules_tool", bridge_result)):
+        if candidate_result is not None:
+            memory_tool, memory_result = candidate_tool, candidate_result
+            break
+    if memory_result is not None:
         try:
             record_investigation(
                 target_path, "agent_loop",
-                _summarize_for_memory("trace_change_impact_tool", trace_result))
+                _summarize_for_memory(memory_tool, memory_result))
         except Exception:
             pass  # memory is best-effort; never fail a run over it
     # The display result is the primary investigation payload, not whatever ran

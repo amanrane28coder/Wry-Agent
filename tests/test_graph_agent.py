@@ -1,5 +1,6 @@
 import unittest
 import asyncio
+import json
 import subprocess
 import sys
 import tempfile
@@ -699,6 +700,42 @@ class GraphAgentTests(unittest.TestCase):
         self.assertEqual(select_analysis_tool("show me the available modules")[0],
                          "list_code_targets")
 
+    def test_request_tool_selection_builds_real_urllib_request(self):
+        # Regression: urllib's Request was shadowed by fastapi.Request, so the
+        # model call TypeError'd and silently fell back to rules. This test
+        # exercises the real request construction against a fake urlopen.
+        from main import _request_tool_selection
+
+        captured = {}
+
+        class FakeResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return False
+
+            def read(self):
+                return b'{"choices": []}'
+
+        def fake_urlopen(request, timeout=None):
+            captured["url"] = request.full_url
+            captured["method"] = request.get_method()
+            captured["data"] = request.data
+            captured["headers"] = {k.lower(): v for k, v in request.header_items()}
+            return FakeResponse()
+
+        with patch.dict("os.environ", {"OPENAI_API_KEY": "test-key"}), \
+                patch("main.urlopen", side_effect=fake_urlopen):
+            result = _request_tool_selection("https://api.openai.com/v1", {"model": "gpt-x"})
+
+        self.assertEqual(captured["url"], "https://api.openai.com/v1/chat/completions")
+        self.assertEqual(captured["method"], "POST")
+        self.assertEqual(json.loads(captured["data"]), {"model": "gpt-x"})
+        self.assertEqual(captured["headers"]["authorization"], "Bearer test-key")
+        self.assertEqual(captured["headers"]["content-type"], "application/json")
+        self.assertEqual(result, {"choices": []})
+
     def test_model_choice_allows_pagerank_tool(self):
         from main import choose_analysis_tool
 
@@ -801,6 +838,65 @@ class GraphAgentTests(unittest.TestCase):
         self.assertEqual(result["result"]["tool"], "rank_tests_pagerank")
         self.assertIn("recall", result["result"]["cypher"])
         self.assertIn("recall_ms", result["result"]["timings"])
+
+    def test_agent_loop_records_communities_first_investigation(self):
+        # A communities-first run recalls history but has no trace_result;
+        # it must still leave its own finding in memory.
+        from main import run_agent_loop
+
+        async def fake_call_tool(name, arguments):
+            if name == "find_impact_communities_tool":
+                return {"target": "src/core/token_store.py", "target_community": 2,
+                        "community_count": 3, "impacted_communities": 2,
+                        "communities": [], "tool": "find_impact_communities"}
+            if name == "recall_investigations_tool":
+                return {"investigation_count": 0, "investigations": []}
+            raise AssertionError(f"unexpected tool call: {name}")
+
+        with patch("main.call_mcp_tool", side_effect=fake_call_tool), \
+                patch("main.record_investigation", return_value="inv-1") as mock_record:
+            result = asyncio.run(run_agent_loop(
+                "which communities does this change touch?", "src/core/token_store.py"))
+
+        actions = [step["action"] for step in result["steps"]]
+        self.assertEqual(actions, ["find_impact_communities_tool", "recall_investigations_tool"])
+        mock_record.assert_called_once()
+        summary = mock_record.call_args[0][2]
+        self.assertIn("2 of 3", summary["text"])
+
+    def test_agent_loop_records_shortest_path_investigation(self):
+        from main import run_agent_loop
+
+        async def fake_call_tool(name, arguments):
+            if name == "shortest_dependency_path_tool":
+                return {"connected": True, "hops": 2, "from": "a.py", "to": "b.py",
+                        "chain": ["a.py", "m.py", "b.py"], "tool": "shortest_dependency_path"}
+            if name == "recall_investigations_tool":
+                return {"investigation_count": 0, "investigations": []}
+            raise AssertionError(f"unexpected tool call: {name}")
+
+        with patch("main.call_mcp_tool", side_effect=fake_call_tool), \
+                patch("main.record_investigation", return_value="inv-1") as mock_record:
+            result = asyncio.run(run_agent_loop("shortest path", "a.py", other_path="b.py"))
+
+        mock_record.assert_called_once()
+        summary = mock_record.call_args[0][2]
+        self.assertIn("2 hops", summary["text"])
+
+    def test_bridge_and_shortest_path_provenance_follows_dataset(self):
+        graph = FakeGraph(betweenness_rows=[("src/core/auth_service.py", 12.5)])
+        with patch.object(graph_agent, "get_graph", return_value=graph), \
+                patch.object(graph_agent, "_ACTIVE_DATASET", "local"):
+            bridge = graph_agent.find_bridge_modules()
+            path = graph_agent.shortest_dependency_path(
+                "src/api/auth_routes.py", "src/core/token_store.py")
+        self.assertIn("Local", bridge["provenance"])
+        self.assertNotIn("Synthetic", bridge["provenance"])
+        self.assertIn("Local", path["provenance"])
+        self.assertNotIn("Synthetic", path["provenance"])
+        with patch.object(graph_agent, "get_graph", return_value=graph):
+            bridge_demo = graph_agent.find_bridge_modules()
+        self.assertIn("Synthetic", bridge_demo["provenance"])
 
     def test_agent_loop_listing_is_single_step(self):
         from main import run_agent_loop

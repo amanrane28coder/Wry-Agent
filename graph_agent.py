@@ -907,7 +907,7 @@ def shortest_dependency_path(from_path: str, to_path: str):
             "tool": "shortest_dependency_path",
             "cypher": {"shortest_path": SHORTEST_PATH_CYPHER},
             "timings": {"shortest_path_ms": ms},
-            "provenance": "Synthetic dependency edges, seeded idempotently into FalkorDB.",
+            "provenance": ("Local Python import metadata." if _ACTIVE_DATASET == "local" else "Synthetic dependency edges, seeded idempotently into FalkorDB."),
         }
     chain, hops = rows[0][0], int(rows[0][1])
     return {
@@ -923,7 +923,7 @@ def shortest_dependency_path(from_path: str, to_path: str):
         "tool": "shortest_dependency_path",
         "cypher": {"shortest_path": SHORTEST_PATH_CYPHER},
         "timings": {"shortest_path_ms": ms},
-        "provenance": "Synthetic dependency edges, seeded idempotently into FalkorDB.",
+        "provenance": ("Local Python import metadata." if _ACTIVE_DATASET == "local" else "Synthetic dependency edges, seeded idempotently into FalkorDB."),
     }
 
 
@@ -950,7 +950,7 @@ def find_bridge_modules(limit: int = 10):
             f"touches the most routes through the codebase."
         ),
         "tool": "find_bridge_modules",
-        "provenance": "Synthetic dependency edges, seeded idempotently into FalkorDB.",
+        "provenance": ("Local Python import metadata." if _ACTIVE_DATASET == "local" else "Synthetic dependency edges, seeded idempotently into FalkorDB."),
     }
 
 
