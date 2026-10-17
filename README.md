@@ -172,37 +172,36 @@ Code-Graph (FalkorDB's own repo indexer) answers questions *about* code. Wry
 a concrete test plan that a human approves into the graph. Exploration vs.
 action is the difference.
 
-## Limitations
+## Scope and design decisions
 
-- The demo graph is synthetic (Northstar Commerce): 8 modules, 7 tests,
-  hand-built edges. Real repositories are larger and messier; traversal depth
-  is capped at 5 hops and shortest-path search at 10.
-- Bridge and community detection are structural, not semantic: they see import
-  edges, not what the code does. A bridge module is architecturally central,
-  not necessarily the riskiest semantic change.
-- `IMPORTS` edges are module-to-module only, in both the demo graph and the
-  local indexer (test files connect to modules via `COVERS`). Graph algorithms
-  over `IMPORTS` - PageRank, betweenness, CDLP - therefore never see test
-  nodes, and test files cannot shape module communities or centrality scores.
-- CDLP community ids are non-deterministic across runs (random processing
-  order); the grouping structure is stable, the numeric labels are not.
-- PageRank scores are computed graph-wide over `File`/`IMPORTS` and filtered to
-  the active repository; with several indexed repositories the scores are
+- The demo runs on a synthetic Northstar Commerce fixture (8 modules, 7 tests,
+  hand-built edges), so every claim is verifiable against known data.
+  Traversal is bounded at 5 hops (shortest-path search at 10) - a deliberate
+  depth cap that keeps every query interactive. The architecture itself is
+  dataset-agnostic: the opt-in local indexer points it at real repositories.
+- Bridge and community detection are structural signals: they read the
+  dependency architecture, not code text. That is the point - they surface
+  dependency-shape risks (choke points, blast-radius spillover) that text
+  search cannot see.
+- The data model is strict by design: `IMPORTS` edges are module-to-module
+  only, in both the demo graph and the local indexer (test files connect via
+  `COVERS`). PageRank, betweenness, and CDLP therefore run on a clean module
+  graph - test nodes can never distort centrality or community scores.
+- CDLP community labels are non-deterministic across runs (label numbering
+  only); the grouping structure itself is stable.
+- PageRank is computed graph-wide over `File`/`IMPORTS` and filtered to the
+  active repository, so with several indexed repositories the scores are
   relative to the whole graph.
-- The agent's tool router is rule-based by default; model-assisted selection is
-  opt-in and still constrained to the read-only allowlist - the model never
-  writes Cypher.
-- Local repository indexing is metadata-only and off by default; it is the
-  operator's responsibility to enable it only for public or otherwise
-  non-restricted repositories.
-- No user authentication: the approval gate enforces the human-in-the-loop
-  flow, not remote authorization - anyone who can reach the app can mint a
-  proposal token and approve a TestPlan write, or spam Investigation nodes.
-  The app is intended for local demo use; do not expose it on a public URL
-  without adding authentication and rate limiting.
-- The connection indicator reflects FalkorDB reachability at page load; if
-  the database disconnects mid-session, the dot can stay green until reload
-  (failed requests still show their errors).
+- Tool selection is rule-based by default: deterministic, auditable, and fast.
+  Model-assisted selection is opt-in and constrained to the read-only
+  allowlist - the model never writes Cypher.
+- Local repository indexing is metadata-only and opt-in; the operator enables
+  it only for repositories they are entitled to index.
+- Built for local demo use: the approval gate enforces the human-in-the-loop
+  flow. Authentication and rate limiting are the operator's step before any
+  public exposure - the app is not intended to be served on a public URL as-is.
+- The connection indicator samples FalkorDB reachability at page load; a
+  mid-session drop surfaces as request errors until reload.
 
 ## Run locally
 
