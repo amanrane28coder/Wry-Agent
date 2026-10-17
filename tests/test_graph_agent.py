@@ -808,11 +808,14 @@ class GraphAgentTests(unittest.TestCase):
         mock_targets.assert_called_once_with()
         self.assertEqual(result[0]["path"], "src/core/token_store.py")
 
-    def test_targets_endpoint_degrades_gracefully_without_graph(self):
+    def test_targets_endpoint_reports_unreachable_graph(self):
         from main import targets
+        from fastapi import HTTPException
 
         with patch("main.list_targets", side_effect=RuntimeError("FalkorDB is not configured.")):
-            self.assertEqual(asyncio.run(targets()), [])
+            with self.assertRaises(HTTPException) as ctx:
+                asyncio.run(targets())
+        self.assertEqual(ctx.exception.status_code, 503)
 
     def test_startup_demo_seed_is_best_effort(self):
         from main import seed_demo_graph_at_startup

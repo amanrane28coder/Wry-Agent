@@ -12,13 +12,15 @@
   let planProposalToken = null;
   let repositoryStatus = null;
   let allTargets = [];
+  let targetsReachable = false;
 
   async function initialize() {
     const [statusResponse, targetsResponse] = await Promise.all([
       fetch("/api/status"), fetch("/api/targets")
     ]);
     repositoryStatus = await statusResponse.json();
-    const targets = await targetsResponse.json();
+    targetsReachable = targetsResponse.ok;
+    const targets = targetsReachable ? await targetsResponse.json() : [];
     updateConnection(repositoryStatus);
     updateRepositoryLabel(repositoryStatus);
     renderTargets(targets);
@@ -35,12 +37,19 @@
       indexButton.disabled = true;
       evalButton.disabled = true;
       runAgentButton.disabled = true;
+    } else if (!targetsReachable) {
+      $("#query-message").textContent = "FalkorDB is configured but not reachable. Check the instance is running and the .env values.";
+      indexButton.disabled = true;
+      evalButton.disabled = true;
+      runAgentButton.disabled = true;
     }
   }
 
   function updateConnection(status) {
-    $("#connection-text").textContent = status.configured ? `FALKORDB · ${status.graph.toUpperCase()}` : "FALKORDB NOT CONFIGURED";
-    $("#connection-dot").classList.toggle("online", status.configured);
+    $("#connection-text").textContent = !status.configured
+      ? "FALKORDB NOT CONFIGURED"
+      : (targetsReachable ? `FALKORDB · ${status.graph.toUpperCase()}` : "FALKORDB UNREACHABLE");
+    $("#connection-dot").classList.toggle("online", status.configured && targetsReachable);
     $("#agent-mode-label").textContent = `${status.agent_mode}. Analysis is read-only; model selection is opt-in.`;
   }
 

@@ -262,12 +262,13 @@ async def status():
 @app.get("/api/targets")
 async def targets():
     # Always read from FalkorDB so the module list reflects the graph, even in
-    # demo mode. Degrades to an empty list when the graph is unavailable; the
-    # UI disables analysis controls and /api/status reports the connection.
+    # demo mode. A connection failure is a 503, not a silent empty list, so the
+    # UI can tell "FalkorDB unreachable" apart from "no targets" and the status
+    # indicator never claims "online" for a graph it cannot reach.
     try:
         return list_targets()
-    except Exception:
-        return []
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="FalkorDB is not reachable.") from exc
 
 
 @app.post("/api/repository/index")
