@@ -200,6 +200,9 @@ action is the difference.
   proposal token and approve a TestPlan write, or spam Investigation nodes.
   The app is intended for local demo use; do not expose it on a public URL
   without adding authentication and rate limiting.
+- The connection indicator reflects FalkorDB reachability at page load; if
+  the database disconnects mid-session, the dot can stay green until reload
+  (failed requests still show their errors).
 
 ## Run locally
 
