@@ -195,6 +195,11 @@ action is the difference.
 - Local repository indexing is metadata-only and off by default; it is the
   operator's responsibility to enable it only for public or otherwise
   non-restricted repositories.
+- No user authentication: the approval gate enforces the human-in-the-loop
+  flow, not remote authorization - anyone who can reach the app can mint a
+  proposal token and approve a TestPlan write, or spam Investigation nodes.
+  The app is intended for local demo use; do not expose it on a public URL
+  without adding authentication and rate limiting.
 
 ## Run locally
 
