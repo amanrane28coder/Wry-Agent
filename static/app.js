@@ -250,7 +250,8 @@
     const isChain = !listing && (tool === "shortest_dependency_path_tool" || result.tool === "shortest_dependency_path");
     const isBridges = !listing && (tool === "find_bridge_modules_tool" || result.tool === "find_bridge_modules");
     const isCommunities = !listing && (tool === "find_impact_communities_tool" || result.tool === "find_impact_communities");
-    const showStandard = !listing && !isChain && !isBridges && !isCommunities;
+    const isRecall = !listing && result.tool === "recall_investigations";
+    const showStandard = !listing && !isChain && !isBridges && !isCommunities && !isRecall;
 
     $("#metrics").style.display = showStandard || listing ? "" : "none";
     if (showStandard || listing) {
@@ -297,7 +298,7 @@
       pagerankHeading.hidden = true;
       pagerankList.hidden = true;
     }
-    renderMemory(payload.past_investigations);
+    renderMemory(isRecall ? result : payload.past_investigations);
     $("#provenance").textContent = `${result.reasoning} ${result.provenance}`;
     renderCypher(result, listing);
     $("#plan-message").textContent = "";

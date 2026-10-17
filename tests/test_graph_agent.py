@@ -779,6 +779,77 @@ class GraphAgentTests(unittest.TestCase):
         self.assertEqual(seen[0][1]["to_path"], "src/core/token_store.py")
         self.assertIn("2 hops", result["steps"][0]["observation"])
 
+    def test_agent_loop_preserves_shortest_path_display_result(self):
+        # The trailing memory-recall step must not overwrite the shortest-path
+        # payload: the UI renders the display result from its tool marker.
+        from main import run_agent_loop
+
+        async def fake_call_tool(name, arguments):
+            if name == "shortest_dependency_path_tool":
+                return {"connected": True, "hops": 2, "from": arguments["from_path"],
+                        "to": arguments["to_path"],
+                        "chain": [arguments["from_path"], "src/core/auth_service.py",
+                                  arguments["to_path"]],
+                        "tool": "shortest_dependency_path"}
+            return {"investigation_count": 0, "investigations": [],
+                    "tool": "recall_investigations"}
+
+        with patch("main.call_mcp_tool", side_effect=fake_call_tool), \
+                patch("main.record_investigation", return_value="inv-1"):
+            result = asyncio.run(run_agent_loop(
+                "show the path", "src/api/auth_routes.py", other_path="src/core/token_store.py"))
+
+        display = result["result"]
+        self.assertEqual(display["tool"], "shortest_dependency_path")
+        self.assertEqual(display["hops"], 2)
+        self.assertEqual(len(display["chain"]), 3)
+        self.assertNotIn("affected_files", display)
+
+    def test_agent_loop_preserves_bridge_display_result(self):
+        from main import run_agent_loop
+
+        async def fake_call_tool(name, arguments):
+            if name == "find_bridge_modules_tool":
+                return {"bridges": [{"path": "src/core/auth_service.py", "score": 12.5}],
+                        "tool": "find_bridge_modules"}
+            return {"investigation_count": 0, "investigations": [],
+                    "tool": "recall_investigations"}
+
+        with patch("main.call_mcp_tool", side_effect=fake_call_tool), \
+                patch("main.choose_analysis_tool",
+                      return_value=("find_bridge_modules_tool", {}, "bridges", "rules")), \
+                patch("main.record_investigation", return_value="inv-1"):
+            result = asyncio.run(run_agent_loop(
+                "show me the choke points", "src/core/token_store.py"))
+
+        display = result["result"]
+        self.assertEqual(display["tool"], "find_bridge_modules")
+        self.assertEqual(display["bridges"][0]["path"], "src/core/auth_service.py")
+        self.assertNotIn("affected_files", display)
+
+    def test_agent_loop_recall_display_result_carries_tool_marker(self):
+        # A recall result has no affected_files; the UI routes it to the memory
+        # section via its tool marker instead of the standard trace render.
+        from main import run_agent_loop
+
+        async def fake_call_tool(name, arguments):
+            self.assertEqual(name, "recall_investigations_tool")
+            return {"target": "src/core/token_store.py", "investigation_count": 1,
+                    "investigations": [{"summary": "earlier work"}],
+                    "tool": "recall_investigations"}
+
+        with patch("main.call_mcp_tool", side_effect=fake_call_tool), \
+                patch("main.choose_analysis_tool",
+                      return_value=("recall_investigations_tool", {}, "recall", "rules")), \
+                patch("main.record_investigation", return_value="inv-1"):
+            result = asyncio.run(run_agent_loop(
+                "what did we learn about this module before", "src/core/token_store.py"))
+
+        display = result["result"]
+        self.assertEqual(display["tool"], "recall_investigations")
+        self.assertNotIn("affected_files", display)
+        self.assertEqual(display["investigation_count"], 1)
+
     def test_agent_loop_respects_max_steps(self):
         from main import run_agent_loop
 

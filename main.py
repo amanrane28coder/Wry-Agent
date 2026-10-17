@@ -410,9 +410,13 @@ async def run_agent_loop(prompt: str, target_path: str, other_path: str | None =
     trace_result = None
     rank_result = None
     communities_result = None
+    shortest_path_result = None
+    bridge_result = None
+    recall_result = None
 
     async def take_step(thought: str, tool_name: str, arguments: dict):
         nonlocal final_result, trace_result, rank_result, communities_result
+        nonlocal shortest_path_result, bridge_result, recall_result
         tool_result = await call_mcp_tool(tool_name, arguments)
         final_result = tool_result
         if tool_name == "trace_change_impact_tool":
@@ -421,6 +425,12 @@ async def run_agent_loop(prompt: str, target_path: str, other_path: str | None =
             rank_result = tool_result
         if tool_name == "find_impact_communities_tool":
             communities_result = tool_result
+        if tool_name == "shortest_dependency_path_tool":
+            shortest_path_result = tool_result
+        if tool_name == "find_bridge_modules_tool":
+            bridge_result = tool_result
+        if tool_name == "recall_investigations_tool":
+            recall_result = tool_result
         observation = _summarize_observation(tool_name, tool_result)
         observations[tool_name] = observation
         steps.append({
@@ -545,7 +555,14 @@ async def run_agent_loop(prompt: str, target_path: str, other_path: str | None =
                 _summarize_for_memory("trace_change_impact_tool", trace_result))
         except Exception:
             pass  # memory is best-effort; never fail a run over it
-    display_result = rank_result or trace_result or communities_result or final_result
+    # The display result is the primary investigation payload, not whatever ran
+    # last: a trailing memory-recall step must not overwrite a shortest-path,
+    # bridge, or recall result that the UI renders from its own tool marker.
+    display_result = (
+        rank_result or trace_result or communities_result
+        or shortest_path_result or bridge_result or recall_result
+        or final_result
+    )
     if (communities_result is not None and isinstance(display_result, dict)
             and display_result.get("tool") != "find_impact_communities"):
         # The blast-radius analysis belongs next to the trace/ranking in the UI,
