@@ -332,7 +332,7 @@ async def investigate(request: InvestigateRequest):
     # agent runtime — the MCP investigation tools themselves stay read-only.
     if not isinstance(result, list) and tool_name in {
         "trace_change_impact_tool", "rank_tests_pagerank_tool", "shortest_dependency_path_tool",
-        "find_impact_communities_tool",
+        "find_impact_communities_tool", "find_bridge_modules_tool",
     }:
         memory = _summarize_for_memory(tool_name, result)
         try:
@@ -367,16 +367,6 @@ def _summarize_for_memory(tool_name: str, result: dict) -> dict:
                     f"{result.get('hops', '?')} hops via {' -> '.join(chain)}."
                     if result.get("connected") else
                     f"No dependency path from {result.get('from')} to {result.get('to')}.",
-        }
-    if tool_name == "find_bridge_modules_tool":
-        bridges = result.get("bridges", [])
-        top = bridges[0]["path"] if bridges else "none"
-        return {
-            "importer_count": 0,
-            "test_count": 0,
-            "top_test": "",
-            "text": (f"Top architectural choke point is {top} "
-                     f"({len(bridges)} modules scored by betweenness)."),
         }
     if tool_name == "find_bridge_modules_tool":
         bridges = result.get("bridges", [])
@@ -575,14 +565,15 @@ async def run_agent_loop(prompt: str, target_path: str, other_path: str | None =
         })
 
     final_answer = _compose_final_answer(target_path, steps, observations, proposed_action)
-    # Record the investigation for whichever analysis produced the primary
-    # result: a communities-first or shortest-path run recalls history too,
-    # so it should leave its own finding in memory. Pure recall runs and
-    # listings produce no new finding, so they record nothing.
+    # Record the investigation for the primary (displayed) result, in the
+    # same precedence the UI uses: a trace+rank run shows the PageRank
+    # ranking, so the stored summary must be the rank one, not the trace one.
+    # Pure recall runs and listings produce no new finding, so they record
+    # nothing.
     memory_tool, memory_result = None, None
     for candidate_tool, candidate_result in (
-            ("trace_change_impact_tool", trace_result),
             ("rank_tests_pagerank_tool", rank_result),
+            ("trace_change_impact_tool", trace_result),
             ("find_impact_communities_tool", communities_result),
             ("shortest_dependency_path_tool", shortest_path_result),
             ("find_bridge_modules_tool", bridge_result)):

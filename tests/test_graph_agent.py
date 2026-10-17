@@ -898,6 +898,42 @@ class GraphAgentTests(unittest.TestCase):
             bridge_demo = graph_agent.find_bridge_modules()
         self.assertIn("Synthetic", bridge_demo["provenance"])
 
+    def test_agent_loop_records_rank_summary_when_ranked(self):
+        # Memory must match the displayed result: a trace+rank run shows the
+        # PageRank ranking, so the stored summary is the rank one, not trace.
+        from main import run_agent_loop
+
+        async def fake_call_tool(name, arguments):
+            if name == "trace_change_impact_tool":
+                return {"target": "src/core/token_store.py", "impact_count": 4,
+                        "recommended_tests": [{"path": "tests/test_b.py"},
+                                              {"path": "tests/test_a.py"}],
+                        "tool": "trace_change_impact"}
+            if name == "rank_tests_pagerank_tool":
+                return {"target": "src/core/token_store.py",
+                        "ranked_tests": [{"path": "tests/test_a.py", "pagerank_score": 0.35},
+                                         {"path": "tests/test_b.py", "pagerank_score": 0.20}],
+                        "tool": "rank_tests_pagerank"}
+            if name == "find_impact_communities_tool":
+                return {"target": "src/core/token_store.py", "impacted_communities": 1,
+                        "tool": "find_impact_communities"}
+            if name == "recall_investigations_tool":
+                return {"investigation_count": 0, "investigations": []}
+            raise AssertionError(f"unexpected tool call: {name}")
+
+        with patch("main.call_mcp_tool", side_effect=fake_call_tool), \
+                patch("main.record_investigation", return_value="inv-1") as mock_record:
+            result = asyncio.run(run_agent_loop(
+                "Investigate the change and rank the riskiest tests",
+                "src/core/token_store.py"))
+
+        # the displayed result is the PageRank ranking ...
+        self.assertEqual(result["result"]["tool"], "rank_tests_pagerank")
+        # ... and the stored summary is the rank one (top_test_a), not trace's
+        mock_record.assert_called_once()
+        summary = mock_record.call_args[0][2]
+        self.assertEqual(summary["top_test"], "tests/test_a.py")
+
     def test_agent_loop_listing_is_single_step(self):
         from main import run_agent_loop
 
@@ -1277,6 +1313,31 @@ class GraphAgentTests(unittest.TestCase):
         self.assertEqual(response["selected_tool"], "shortest_dependency_path_tool")
         self.assertEqual(seen, {"from_path": "src/a.py", "to_path": "src/b.py"})
 
+
+    def test_investigate_records_bridge_investigation(self):
+        # Regression: the investigate memory allowlist omitted
+        # find_bridge_modules_tool, so bridge findings were never remembered.
+        from main import InvestigateRequest, investigate
+
+        async def fake_call_tool(name, arguments):
+            self.assertEqual(name, "find_bridge_modules_tool")
+            return {"bridges": [{"path": "src/core/auth_service.py",
+                                 "betweenness_score": 12.5}],
+                    "tool": "find_bridge_modules"}
+
+        with patch("main.choose_analysis_tool",
+                   return_value=("find_bridge_modules_tool", {}, "choke points", "rules")), \
+                patch("main.call_mcp_tool", side_effect=fake_call_tool), \
+                patch("main.record_investigation", return_value="inv-1") as mock_record, \
+                patch("main.recall_investigations",
+                      return_value={"investigation_count": 0, "investigations": []}):
+            response = asyncio.run(investigate(InvestigateRequest(
+                prompt="show me the choke points", target_path="src/core/token_store.py")))
+
+        self.assertEqual(response["selected_tool"], "find_bridge_modules_tool")
+        mock_record.assert_called_once()
+        summary = mock_record.call_args[0][2]
+        self.assertIn("auth_service", summary["text"])
 
     def test_mcp_server_creation_emits_no_incomplete_field_warning(self):
         # Regression: pydantic-settings emitted IncompleteFieldDefinitionWarning
